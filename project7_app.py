@@ -1,6 +1,10 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import sklearn
+import streamlit as st
+
+st.sidebar.write("⚙️ Streamlit sklearn version:", sklearn.__version__)
 
 st.set_page_config(page_title="NO₂concentrations across European capital cities", page_icon="🌍", layout="wide")
 
