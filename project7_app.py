@@ -114,25 +114,44 @@ st.altair_chart(avg_chart, use_container_width=True)
 # --------------------------------------------------------
 # 2) MONTH-BY-MONTH FILTERING GRAPH (dynamic)
 # --------------------------------------------------------
-st.subheader(f"📅 NO₂ Levels by City — {selected_month} {selected_year_for_month}")
+st.subheader(f" NO₂ Levels by City — {selected_month.strftime('%B %Y')}")
 
-df_month = df[
-    (df["year"] == selected_year_for_month) &
-    (df["month_num"] == selected_month_num)
-]
+# Filter for selected month
+month_df = df[df["month"] == selected_month].copy()
 
-month_chart = (
-    alt.Chart(df_month)
+# Get EU27 value
+eu27_value = month_df.loc[month_df["City"] == "EU27 (aggregate)", "NO2"].values[0]
+
+# Classify cities by color
+def classify_color(row):
+    if row["City"] == "EU27 (aggregate)":
+        return "EU27"
+    elif row["NO2"] > eu27_value:
+        return "Above EU27"
+    else:
+        return "Below EU27"
+
+month_df["color_group"] = month_df.apply(classify_color, axis=1)
+
+# Color rules
+color_scale = alt.Scale(
+    domain=["EU27", "Above EU27", "Below EU27"],
+    range=["#FFD700", "#E74C3C", "#2ECC71"]  # yellow, red, green
+)
+
+# Chart
+bar_chart = (
+    alt.Chart(month_df)
     .mark_bar()
     .encode(
         x=alt.X("City:N", sort="-y"),
-        y="NO2:Q",
-        color="City:N",
+        y=alt.Y("NO2:Q", title="NO₂"),
+        color=alt.Color("color_group:N", scale=color_scale, legend=None),
         tooltip=["City", "NO2"]
     )
 )
 
-st.altair_chart(month_chart, use_container_width=True)
+st.altair_chart(bar_chart, use_container_width=True)
 
 # --------------------------------------------------------
 # 3) TREND / CORRELATION GRAPH
