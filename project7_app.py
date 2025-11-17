@@ -4,8 +4,9 @@ import altair as alt
 
 st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide")
 
+
 # --------------------------------------------------------
-# 1) LOAD DATA
+# LOAD DATA
 # --------------------------------------------------------
 @st.cache_data
 def load_data():
@@ -13,22 +14,23 @@ def load_data():
 
 df = load_data()
 
+
 # --------------------------------------------------------
 # SIDEBAR FILTERS
 # --------------------------------------------------------
 st.sidebar.header("Filters")
 
-# Multiple cities instead of one
+# Multi-city selector
 all_cities = sorted(df["City"].unique())
 selected_cities = st.sidebar.multiselect(
     "Select cities:",
     all_cities,
-    default=["Vienna (Austria)", "Paris (France)"]
+    default=[all_cities[0]]
 )
 
-# Date range filter
-min_date = df["month"].min()
-max_date = df["month"].max()
+# Fix: convert Timestamp → date for Streamlit slider
+min_date = df["month"].min().date()
+max_date = df["month"].max().date()
 
 date_range = st.sidebar.slider(
     "Select date range:",
@@ -37,11 +39,13 @@ date_range = st.sidebar.slider(
     value=(min_date, max_date)
 )
 
-# Filter the dataset
+# Filter (convert month to date)
 filtered = df[
     (df["City"].isin(selected_cities)) &
-    (df["month"].between(date_range[0], date_range[1]))
+    (df["month"].dt.date >= date_range[0]) &
+    (df["month"].dt.date <= date_range[1])
 ]
+
 
 # --------------------------------------------------------
 # MAIN CONTENT
@@ -49,8 +53,9 @@ filtered = df[
 st.title("🌍 European NO₂ Concentration Dashboard")
 st.write("Compare NO₂ pollution levels across multiple European capital cities.")
 
+
 # --------------------------------------------------------
-# LINE CHART (multi-city)
+# LINE CHART
 # --------------------------------------------------------
 st.subheader("NO₂ Over Time")
 
@@ -68,10 +73,11 @@ line_chart = (
 
 st.altair_chart(line_chart, use_container_width=True)
 
+
 # --------------------------------------------------------
-# CITY COMPARISON TABLE
+# AVERAGE TABLE
 # --------------------------------------------------------
-st.subheader("Average NO₂ Levels by City")
+st.subheader("Average NO₂ Levels by City (Selected Range)")
 
 avg_table = (
     filtered.groupby("City")["NO2"]
@@ -83,16 +89,16 @@ avg_table = (
 
 st.dataframe(avg_table, use_container_width=True)
 
-# --------------------------------------------------------
-# UX / HEURISTIC NOTES
-# --------------------------------------------------------
-with st.expander("ℹ Usability Notes (for Project 7 Requirements)"):
-    st.write("""
-    **This dashboard was designed with the following HCI/UX principles:**
 
-    -  *Visibility & User Control*: Users can interactively filter cities and date ranges.
-    -  *Consistency*: The same color is applied to each city across graphs.
-    -  *Feedback*: Filters update charts instantly.
-    -  *Minimal Cognitive Load*: Simple visual representation of pollution trends.
-    -  *Heuristic Evaluation*: Tested with basic user interactions (filters, sliders).
+# --------------------------------------------------------
+# HCI/UX NOTES — Project 7 Requirement
+# --------------------------------------------------------
+with st.expander("ℹ Usability Notes"):
+    st.write("""
+    ### HCI & UX Improvements
+    - **Interactive filtering**: cities and date range
+    - **User control & freedom**: easy to reset or expand selections
+    - **Clear feedback**: charts update instantly
+    - **Consistency**: colors match per city
+    - **Minimal cognitive load**: simple, clean layout
     """)
