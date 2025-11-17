@@ -44,54 +44,57 @@ with tab1:
         default=["EU27 (aggregate)", "Riga (Latvia)", "Tallinn (Estonia)"]
     )
 
-    # ---- year range ----
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
-    # ---- filter ----
     df_t = df[
         (df["City"].isin(cities)) &
         (df["year"].between(years[0], years[1]))
     ].copy()
 
-    # ---- short month & year ----
-    df_t["month_short"] = df_t["month"].dt.strftime("%b")
-    df_t["year_only"] = df_t["month"].dt.year
+    # Short month labels (Jan, Feb, …)
+    df_t["month_label"] = df_t["month"].dt.strftime("%b %Y")
 
-    # ---- manual color map ----
-    # EU27 red, others get neutral palette (no red)
-    non_red_palette = px.colors.qualitative.Dark24  # safe palette without red tones
-    non_red_palette = [c for c in non_red_palette if "FF0000" not in c and "#FF" not in c]
+    # ---- Color mapping (EU27 fixed red) ----
+    non_red_palette = px.colors.qualitative.Dark24
+    non_red_palette = [c for c in non_red_palette if "FF0000" not in c]  # remove red
 
-    # Build dynamic color map
     color_map = {"EU27 (aggregate)": "red"}
-
     other_cities = [c for c in cities if c != "EU27 (aggregate)"]
+
     for i, city in enumerate(other_cities):
         color_map[city] = non_red_palette[i % len(non_red_palette)]
 
+    # ---- Plot ----
     fig = px.line(
         df_t,
-        x="month",
+        x="month_label",
         y="NO2",
         color="City",
         markers=True,
-        title="NO₂ Concentrations Over Time",
+        title="NO₂ Concentrations Across Time",
         color_discrete_map=color_map
     )
 
-    # ---- tooltip ----
+    # ---- Hover info ----
     fig.update_traces(
         hovertemplate="<b>City</b>=%{text}<br>" +
                       "NO₂=%{y}<br>" +
-                      "month=%{customdata[0]}<br>" +
-                      "year=%{customdata[1]}",
-        text=df_t["City"],
-        customdata=df_t[["month_short", "year_only"]]
+                      "Month=%{x}",
+        text=df_t["City"]
     )
 
-    # ---- x-axis ----
+    # ---- Improve grid: horizontal + vertical ----
     fig.update_layout(
-        xaxis=dict(dtick="M12", tickformat="%Y"),
+        xaxis=dict(
+            showgrid=True,
+            gridcolor="lightgray",
+            tickangle=-45
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="lightgray"
+        ),
+        plot_bgcolor="white",
         legend_title_text="City"
     )
 
