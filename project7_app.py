@@ -10,13 +10,8 @@ st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide"
 @st.cache_data
 def load_data():
     df = pd.read_csv("clean_no2_long.csv", parse_dates=["month"])
-
     df["year"] = df["month"].dt.year
     df["month_num"] = df["month"].dt.month
-
-    # Season must be strings for Plotly
-    df["season"] = df["season"].astype(str)
-
     return df
 
 df = load_data()
@@ -24,7 +19,7 @@ df = load_data()
 st.title("🌍 European NO₂ Dashboard (2018–2025)")
 
 # ========================================================
-# TABS
+#  TABS
 # ========================================================
 tab1, tab2, tab3, tab4 = st.tabs([
     "📈 NO₂ Over Time",
@@ -39,30 +34,24 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("📈 NO₂ Over Time")
 
-    cities = st.multiselect(
-        "Select cities:",
-        sorted(df["City"].unique()),
-        default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"]
-    )
+    cities = st.multiselect("Select cities:", sorted(df["City"].unique()),
+                            default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"])
 
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
-    df_t = df[
-        (df["City"].isin(cities)) &
-        (df["year"].between(years[0], years[1]))
-    ]
+    df_t = df[(df["City"].isin(cities)) &
+              (df["year"].between(years[0], years[1]))]
 
-    fig = px.line(
-        df_t,
-        x="month",
-        y="NO2",
-        color="City",
-        markers=True,
-        title="NO₂ Over Time"
-    )
+    fig = px.line(df_t, x="month", y="NO2", color="City",
+                  markers=True,
+                  title="NO₂ Over Time")
 
+    # Show only years on the x-axis
     fig.update_layout(
-        xaxis=dict(dtick="M12", tickformat="%Y")
+        xaxis=dict(
+            dtick="M12",
+            tickformat="%Y"
+        )
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -74,31 +63,22 @@ with tab1:
 with tab2:
     st.header("🏙️ NO₂ Levels by City")
 
-    selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=7)
-    selected_month = st.selectbox("Select Month:", range(1, 13), index=9)
+    selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=len(df["year"].unique()) - 1)
+    selected_month = st.selectbox("Select Month:", list(range(1, 13)), index=0)
 
     df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)]
 
-    # Determine EU27 baseline
     eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
 
     df_m["color"] = df_m["NO2"].apply(
-        lambda x: (
-            "yellow" if x == eu_value
-            else ("red" if x > eu_value else "green")
-        )
+        lambda x: "yellow" if abs(x - eu_value) < 0.01 else ("red" if x > eu_value else "green")
     )
 
     month_name = pd.to_datetime(f"{selected_year}-{selected_month}-01").strftime("%B %Y")
 
-    fig2 = px.bar(
-        df_m,
-        x="City",
-        y="NO2",
-        color="color",
-        color_discrete_map={"red": "red", "green": "green", "yellow": "gold"},
-        title=f"NO₂ Levels by City — {month_name}"
-    )
+    fig2 = px.bar(df_m, x="City", y="NO2", color="color",
+                  color_discrete_map={"red": "red", "green": "green", "yellow": "gold"},
+                  title=f"NO₂ Levels by City — {month_name}")
 
     fig2.update_layout(xaxis_tickangle=-60)
     st.plotly_chart(fig2, use_container_width=True)
@@ -113,7 +93,6 @@ with tab3:
     df_corr = df.copy()
     df_corr["time_index"] = (df_corr["month"] - df_corr["month"].min()).dt.days
 
-    # Compute correlation: group → corr → take NO2 column
     correlations = (
         df_corr.groupby("City")[["time_index", "NO2"]]
         .corr()
@@ -141,22 +120,28 @@ with tab3:
 with tab4:
     st.header("🍁 Seasonal Variation of NO₂ Concentration")
 
-    # Color map for seasons
-    season_colors = {
-        "1": "lightblue",   # Winter
-        "2": "lightgreen",  # Spring
-        "3": "orange",      # Summer
-        "4": "violet"       # Autumn
-    }
+    df["Season"] = df["month_num"].apply(
+        lambda m:
+            "Winter" if m in [12, 1, 2] else
+            "Spring" if m in [3, 4, 5] else
+            "Summer" if m in [6, 7, 8] else
+            "Autumn"
+    )
 
     fig4 = px.box(
         df,
-        x="season",
+        x="Season",
         y="NO2",
-        color="season",
-        color_discrete_map=season_colors,
-        title="Seasonal Variation of NO₂ in European Capitals"
+        color="Season",
+        title="Seasonal Variation of NO₂ in European Capitals (2018–2025)",
+        labels={"NO2": "NO₂ (µg/m³)", "Season": "Season"},
+        color_discrete_map={
+            "Winter": "#636EFA",
+            "Spring": "#00CC96",
+            "Summer": "#FFA15A",
+            "Autumn": "#AB63FA"
+        }
     )
 
-    fig4.update_layout(xaxis_title="Season")
+    fig4.update_layout(template="plotly_white")
     st.plotly_chart(fig4, use_container_width=True)
