@@ -4,3 +4,4 @@ numpy
 altair
 joblib
 scikit-learn
+plotly
