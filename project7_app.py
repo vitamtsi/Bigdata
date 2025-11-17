@@ -52,7 +52,7 @@ with tab1:
     ].copy()
 
     # Short month labels (Jan, Feb, …)
-    df_t["month_label"] = df_t["month"].dt.strftime("%b %Y")
+    df_t["month"] = df_t["month"].dt.strftime("%b %Y")
 
     # ---- Color mapping (EU27 fixed red) ----
     non_red_palette = px.colors.qualitative.Dark24
