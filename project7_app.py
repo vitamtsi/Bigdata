@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import altair as alt
+import plotly.express as px
 
 st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide")
 
@@ -9,166 +9,104 @@ st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide"
 # --------------------------------------------------------
 @st.cache_data
 def load_data():
-    return pd.read_csv("clean_no2_long.csv", parse_dates=["month"])
+    df = pd.read_csv("clean_no2_long.csv", parse_dates=["month"])
+    df["year"] = df["month"].dt.year
+    df["month_num"] = df["month"].dt.month
+    return df
 
 df = load_data()
-df["year"] = df["month"].dt.year
-df["month_num"] = df["month"].dt.month
-df["month_name"] = df["month"].dt.strftime("%B")
 
 st.title("🌍 European NO₂ Dashboard (2018–2025)")
 
-# --------------------------------------------------------
-# SIDEBAR FILTERS
-# --------------------------------------------------------
-st.sidebar.header("Filters")
+# ========================================================
+#  TABS
+# ========================================================
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📈 NO₂ Over Time",
+    "🏙️ NO₂ Levels by City",
+    "📉 Correlation (Time vs NO₂)",
+    "🍁 Seasonal Variation"
+])
 
-# Select Cities
-cities = sorted(df["City"].unique())
-selected_cities = st.sidebar.multiselect(
-    "Select Cities:",
-    cities,
-    default=cities[:5]
-)
+# ========================================================
+# TAB 1 — TIME SERIES
+# ========================================================
+with tab1:
+    st.header("📈 NO₂ Over Time")
 
-# Year range (for first graph)
-years = sorted(df["year"].unique())
-selected_years = st.sidebar.slider(
-    "Select Year Range:",
-    min_value=min(years),
-    max_value=max(years),
-    value=(min(years), max(years))
-)
+    cities = st.multiselect("Select cities:", sorted(df["City"].unique()),
+                            default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"])
 
-# NEW: Filters for Month-by-Month graph 🌙
-st.sidebar.markdown("---")
-st.sidebar.subheader("Monthly Comparison Chart Filters")
+    years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
-selected_year_for_month = st.sidebar.selectbox(
-    "Select Year for Monthly Chart:",
-    years,
-    index=years.index(2025)
-)
+    df_t = df[(df["City"].isin(cities)) & 
+              (df["year"].between(years[0], years[1]))]
 
-months_map = {
-    1: "January", 2: "February", 3: "March", 4: "April",
-    5: "May", 6: "June", 7: "July", 8: "August",
-    9: "September", 10: "October", 11: "November", 12: "December"
-}
+    fig = px.line(df_t, x="month", y="NO2", color="City",
+                  markers=True,
+                  title="NO₂ over Time")
 
-selected_month = st.sidebar.selectbox(
-    "Select Month:",
-    list(months_map.values()),
-    index=8  # default September
-)
+    fig.update_layout(xaxis=dict(dtick="M12", tickformat="%Y"))
+    st.plotly_chart(fig, use_container_width=True)
 
-selected_month_num = list(months_map.keys())[list(months_map.values()).index(selected_month)]
+# ========================================================
+# TAB 2 — CITY MONTHLY LEVELS
+# ========================================================
+with tab2:
+    st.header("🏙️ NO₂ Levels by City")
 
-# Filter final dataset
-df_filtered = df[
-    (df["City"].isin(selected_cities)) &
-    (df["year"] >= selected_years[0]) &
-    (df["year"] <= selected_years[1])
-]
+    selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=7)
+    selected_month = st.selectbox("Select Month:", range(1, 13), index=9)
 
-# --------------------------------------------------------
-# ORIGINAL TIME SERIES GRAPH
-# --------------------------------------------------------
-st.subheader("📈 NO₂ over Time (with Year Range Filter)")
+    df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)]
 
-time_chart = (
-    alt.Chart(df_filtered)
-    .mark_line(point=True)
-    .encode(
-        x=alt.X(
-            "month:T",
-            title="Year",
-            axis=alt.Axis(format="%Y")  # ← show only years
-        ),
-        y=alt.Y("NO2:Q", title="NO₂ (µg/m³)"),
-        color="City:N",
-        tooltip=["City", "month:T", "NO2"]
+    # COLOR RULE:
+    eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
+    df_m["color"] = df_m["NO2"].apply(
+        lambda x: "yellow" if x == eu_value else ("red" if x > eu_value else "green")
     )
-)
 
-st.altair_chart(time_chart, use_container_width=True)
+    month_name = pd.to_datetime(f"{selected_year}-{selected_month}-01").strftime("%B %Y")
 
-# --------------------------------------------------------
-# 1) AVERAGE NO₂ 2018–2025
-# --------------------------------------------------------
-st.subheader("📊 Average NO₂ Concentration by European Capital (2018–2025)")
+    fig2 = px.bar(df_m, x="City", y="NO2", color="color",
+                  color_discrete_map={"red": "red", "green": "green", "yellow": "gold"},
+                  title=f"NO₂ Levels by City — {month_name}")
 
-avg_chart = (
-    alt.Chart(df_filtered)
-    .mark_bar()
-    .encode(
-        x=alt.X("City:N", sort="-y"),
-        y=alt.Y("mean(NO2):Q", title="Average NO₂ (µg/m³)"),
-        color="City:N",
-        tooltip=["City", "mean(NO2)"]
-    )
-)
+    fig2.update_layout(xaxis_tickangle=-60)
+    st.plotly_chart(fig2, use_container_width=True)
 
-st.altair_chart(avg_chart, use_container_width=True)
+# ========================================================
+# TAB 3 — CORRELATION
+# ========================================================
+with tab3:
+    st.header("📉 Correlation Between Time and NO₂ (2018–2025)")
 
-# --------------------------------------------------------
-# 2) MONTH-BY-MONTH FILTERING GRAPH (dynamic)
-# --------------------------------------------------------
-st.subheader(f" NO₂ Levels by City — {selected_month.strftime('%B %Y')}")
+    df_corr = df.copy()
+    df_corr["time_index"] = (df_corr["month"] - df_corr["month"].min()).dt.days
 
-# Filter for selected month
-month_df = df[df["month"] == selected_month].copy()
+    correlations = df_corr.groupby("City")[["time_index", "NO2"]].corr().iloc[0::2]["NO2"].reset_index()
+    correlations = correlations.rename(columns={"NO2": "correlation"})
 
-# Get EU27 value
-eu27_value = month_df.loc[month_df["City"] == "EU27 (aggregate)", "NO2"].values[0]
+    fig3 = px.bar(correlations.sort_values("correlation"),
+                  x="City", y="correlation",
+                  color="correlation",
+                  color_continuous_scale="RdYlGn",
+                  title="Correlation Between Time and NO₂ Concentration")
 
-# Classify cities by color
-def classify_color(row):
-    if row["City"] == "EU27 (aggregate)":
-        return "EU27"
-    elif row["NO2"] > eu27_value:
-        return "Above EU27"
-    else:
-        return "Below EU27"
+    fig3.update_layout(xaxis_tickangle=-60)
+    st.plotly_chart(fig3, use_container_width=True)
 
-month_df["color_group"] = month_df.apply(classify_color, axis=1)
+# ========================================================
+# TAB 4 — SEASONAL VARIATION
+# ========================================================
+with tab4:
+    st.header("🍁 Seasonal Variation of NO₂ Concentration")
 
-# Color rules
-color_scale = alt.Scale(
-    domain=["EU27", "Above EU27", "Below EU27"],
-    range=["#FFD700", "#E74C3C", "#2ECC71"]  # yellow, red, green
-)
+    fig4 = px.box(df, x="season", y="NO2", color="season",
+                  color_discrete_map={
+                      1: "lightblue", 2: "lightgreen",
+                      3: "orange", 4: "violet"
+                  },
+                  title="Seasonal Variation of NO₂ in European Capitals")
 
-# Chart
-bar_chart = (
-    alt.Chart(month_df)
-    .mark_bar()
-    .encode(
-        x=alt.X("City:N", sort="-y"),
-        y=alt.Y("NO2:Q", title="NO₂"),
-        color=alt.Color("color_group:N", scale=color_scale, legend=None),
-        tooltip=["City", "NO2"]
-    )
-)
-
-st.altair_chart(bar_chart, use_container_width=True)
-
-# --------------------------------------------------------
-# 3) TREND / CORRELATION GRAPH
-# --------------------------------------------------------
-st.subheader("📉 Correlation Between Time and NO₂ Concentration")
-
-trend_chart = (
-    alt.Chart(df_filtered)
-    .mark_line(point=True)
-    .encode(
-        x="month:T",
-        y="NO2:Q",
-        color="City:N",
-        tooltip=["City", "month:T", "NO2"]
-    )
-)
-
-st.altair_chart(trend_chart, use_container_width=True)
-
-st.success("Dashboard loaded successfully! 🚀")
+    st.plotly_chart(fig4, use_container_width=True)
