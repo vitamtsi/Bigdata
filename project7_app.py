@@ -1,40 +1,39 @@
 import streamlit as st
 import pandas as pd
-import joblib
+import altair as alt
 
-st.set_page_config(page_title="NO₂ Prediction Dashboard", page_icon="🌍")
+st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide")
 
-@st.cache_resource
-def load_model():
-    return joblib.load("no2_rf_pipeline.pkl")
+@st.cache_data
+def load_data():
+    return pd.read_csv("clean_no2_long.csv", parse_dates=["month"])
 
-model = load_model()
-FEATURES = model.feature_names_in_
+df = load_data()
 
-st.title("🌍 NO₂ Prediction Dashboard")
+st.sidebar.header("Filters")
+cities = sorted(df["City"].unique())
+selected_city = st.sidebar.selectbox("Choose a city:", cities)
 
-st.sidebar.header("Input")
+year_min = int(df["month"].dt.year.min())
+year_max = int(df["month"].dt.year.max())
+selected_year = st.sidebar.slider("Select year:", year_min, year_max, year_max)
 
-city = st.sidebar.text_input("City", "Vienna (Austria)")
-season = st.sidebar.selectbox("Season", [1,2,3,4])
-year = st.sidebar.number_input("Year", 2000, 2030, 2024)
-month_num = st.sidebar.slider("Month", 1, 12, 4)
-dayofyear = st.sidebar.slider("Day of year", 1, 366, 92)
-prev_no2 = st.sidebar.number_input("Previous month NO₂", 0.0, 200.0, 20.0)
-roll3 = st.sidebar.number_input("3-month rolling NO₂", 0.0, 200.0, 21.0)
+filtered = df[
+    (df["City"] == selected_city) &
+    (df["month"].dt.year == selected_year)
+]
 
-row = {
-    "City": city,
-    "season": season,
-    "year": year,
-    "month_num": month_num,
-    "dayofyear": dayofyear,
-    "NO2_prev_month": prev_no2,
-    "NO2_roll3": roll3
-}
+st.subheader(f"NO₂ Levels in {selected_city} ({selected_year})")
 
-df = pd.DataFrame([row])[list(FEATURES)]
+if filtered.empty:
+    st.warning("No data available.")
+else:
+    chart = (
+        alt.Chart(filtered)
+        .mark_line(point=True)
+        .encode(x="month:T", y="NO2:Q")
+    )
+    st.altair_chart(chart, use_container_width=True)
 
-if st.button("Predict"):
-    prediction = model.predict(df)[0]
-    st.success(f"Predicted NO₂: **{prediction:.2f} µg/m³**")
+st.subheader("Raw Data")
+st.dataframe(filtered)
