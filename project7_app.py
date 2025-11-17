@@ -72,7 +72,7 @@ df_filtered = df[
 ]
 
 # --------------------------------------------------------
-# ORIGINAL BEAUTIFUL TIME SERIES GRAPH
+# ORIGINAL TIME SERIES GRAPH
 # --------------------------------------------------------
 st.subheader("📈 NO₂ over Time (with Year Range Filter)")
 
@@ -80,7 +80,11 @@ time_chart = (
     alt.Chart(df_filtered)
     .mark_line(point=True)
     .encode(
-        x=alt.X("month:T", title="Date"),
+        x=alt.X(
+            "month:T",
+            title="Year",
+            axis=alt.Axis(format="%Y")  # ← show only years
+        ),
         y=alt.Y("NO2:Q", title="NO₂ (µg/m³)"),
         color="City:N",
         tooltip=["City", "month:T", "NO2"]
