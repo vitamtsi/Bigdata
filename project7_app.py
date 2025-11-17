@@ -22,7 +22,7 @@ st.title("🌍 European NO₂ Dashboard (2018–2025)")
 #  TABS
 # ========================================================
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📈 NO₂ Over Time",
+    "📈 Dynamics of NO₂ Across European Capitals",
     "🏙️ NO₂ Levels by City",
     "📉 Correlation (Time vs NO₂)",
     "🍁 Seasonal Variation"
