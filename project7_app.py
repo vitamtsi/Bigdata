@@ -114,6 +114,20 @@ with tab1:
 
     st.plotly_chart(fig, use_container_width=True)
 
+# ============================================================
+# SORT HOVER ORDER BY NO2 VALUE (DESCENDING)
+# ============================================================
+
+# Compute mean NO2 per trace to determine ordering
+trace_means = {}
+for trace in fig.data:
+    trace_means[trace.name] = np.nanmean(trace.y)
+
+# Reorder traces: highest NO2 first
+fig.data = tuple(
+    sorted(fig.data, key=lambda t: trace_means[t.name], reverse=True)
+)
+
 # ========================================================
 # TAB 2 — CITY MONTHLY LEVELS 
 # ========================================================
