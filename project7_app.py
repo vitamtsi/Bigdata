@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="NO₂concentrations across European capital cities", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="Interactive Data Exploration of Air Pollution Across European Capital Cities (2018–2025)", page_icon="🌍", layout="wide")
 
 # --------------------------------------------------------
 # LOAD DATA
