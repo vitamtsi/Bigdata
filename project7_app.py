@@ -4,9 +4,8 @@ import altair as alt
 
 st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide")
 
-
 # --------------------------------------------------------
-# LOAD DATA
+# 1) LOAD DATA
 # --------------------------------------------------------
 @st.cache_data
 def load_data():
@@ -14,91 +13,76 @@ def load_data():
 
 df = load_data()
 
-
 # --------------------------------------------------------
 # SIDEBAR FILTERS
 # --------------------------------------------------------
 st.sidebar.header("Filters")
 
-# Multi-city selector
-all_cities = sorted(df["City"].unique())
-selected_cities = st.sidebar.multiselect(
+# MULTI-SELECT CITIES
+cities = st.sidebar.multiselect(
     "Select cities:",
-    all_cities,
-    default=[all_cities[0]]
+    options=sorted(df["City"].unique()),
+    default=sorted(df["City"].unique())[:3]  # first 3 cities as default
 )
 
-# Fix: convert Timestamp → date for Streamlit slider
-min_date = df["month"].min().date()
-max_date = df["month"].max().date()
+# DATE RANGE FILTER
+min_date = df["month"].min().to_pydatetime()
+max_date = df["month"].max().to_pydatetime()
 
-date_range = st.sidebar.slider(
+date_range = st.sidebar.date_input(
     "Select date range:",
+    value=(min_date, max_date),
     min_value=min_date,
-    max_value=max_date,
-    value=(min_date, max_date)
+    max_value=max_date
 )
 
-# Filter (convert month to date)
-filtered = df[
-    (df["City"].isin(selected_cities)) &
-    (df["month"].dt.date >= date_range[0]) &
-    (df["month"].dt.date <= date_range[1])
-]
+# --------------------------------------------------------
+# APPLY FILTERS
+# --------------------------------------------------------
+filtered = df.copy()
 
+if cities:
+    filtered = filtered[filtered["City"].isin(cities)]
+
+start, end = date_range
+filtered = filtered[(filtered["month"] >= pd.to_datetime(start)) &
+                    (filtered["month"] <= pd.to_datetime(end))]
 
 # --------------------------------------------------------
-# MAIN CONTENT
+# TITLE
 # --------------------------------------------------------
-st.title("🌍 European NO₂ Concentration Dashboard")
-st.write("Compare NO₂ pollution levels across multiple European capital cities.")
-
+st.title("🌍 NO₂ Data Explorer")
+st.write("Filter cities and timeframe to explore NO₂ levels across Europe.")
 
 # --------------------------------------------------------
-# LINE CHART
+# LINE CHART (WITH YEAR TICKS)
 # --------------------------------------------------------
-st.subheader("NO₂ Over Time")
-
-line_chart = (
-    alt.Chart(filtered)
-    .mark_line()
-    .encode(
-        x="month:T",
-        y="NO2:Q",
-        color="City:N",
-        tooltip=["City", "month", "NO2"]
+if filtered.empty:
+    st.warning("No data available for selected filters.")
+else:
+    line_chart = (
+        alt.Chart(filtered)
+        .mark_line()
+        .encode(
+            x=alt.X(
+                "month:T",
+                axis=alt.Axis(
+                    format="%Y",        # Only show YEAR
+                    tickCount="year",   # Tick every year
+                    labelAngle=0
+                )
+            ),
+            y="NO2:Q",
+            color="City:N",
+            tooltip=["City", "month", "NO2"]
+        )
+        .properties(height=400)
     )
-    .properties(height=400)
-)
 
-st.altair_chart(line_chart, use_container_width=True)
-
+    st.altair_chart(line_chart, use_container_width=True)
 
 # --------------------------------------------------------
-# AVERAGE TABLE
+# SHOW RAW DATA
 # --------------------------------------------------------
-st.subheader("Average NO₂ Levels by City (Selected Range)")
-
-avg_table = (
-    filtered.groupby("City")["NO2"]
-    .mean()
-    .round(2)
-    .reset_index()
-    .sort_values("NO2", ascending=False)
-)
-
-st.dataframe(avg_table, use_container_width=True)
-
-
-# --------------------------------------------------------
-# HCI/UX NOTES — Project 7 Requirement
-# --------------------------------------------------------
-with st.expander("ℹ Usability Notes"):
-    st.write("""
-    ### HCI & UX Improvements
-    - **Interactive filtering**: cities and date range
-    - **User control & freedom**: easy to reset or expand selections
-    - **Clear feedback**: charts update instantly
-    - **Consistency**: colors match per city
-    - **Minimal cognitive load**: simple, clean layout
-    """)
+with st.expander("Show filtered data table"):
+    st.dataframe(filtered)
