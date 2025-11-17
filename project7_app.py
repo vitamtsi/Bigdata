@@ -32,24 +32,35 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # TAB 1 — TIME SERIES
 # ========================================================
 with tab1:
-    st.header("📈 Temporal Dynamics of NO₂ Concentrations")
+    st.header("📈 Dynamics of NO₂concentrations across European capital cities")
+
+    # ---- reorder city list so EU27 is always first ----
+    all_cities = sorted(df["City"].unique())
+    reordered_cities = ["EU27 (aggregate)"] + [c for c in all_cities if c != "EU27 (aggregate)"]
 
     cities = st.multiselect(
         "Select cities:",
-        sorted(df["City"].unique()),
-        default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"]
+        reordered_cities,
+        default=["EU27 (aggregate)", "Riga (Latvia)", "Tallinn (Estonia)"]
     )
 
+    # ---- year range ----
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
+    # ---- filter data ----
     df_t = df[
         (df["City"].isin(cities)) &
         (df["year"].between(years[0], years[1]))
-    ]
+    ].copy()
 
-    # Mēneša nosaukums hover datiem
-    df_t["month_name"] = df_t["month"].dt.strftime("%B %Y")
-    df_t["year"] = df_t["month"].dt.year
+    # ---- add formatted month labels ----
+    df_t["month_short"] = df_t["month"].dt.strftime("%b")
+    df_t["year_only"] = df_t["month"].dt.year
+
+    # ---- color rules ----
+    color_map = {
+        "EU27 (aggregate)": "red"
+    }
 
     fig = px.line(
         df_t,
@@ -57,16 +68,25 @@ with tab1:
         y="NO2",
         color="City",
         markers=True,
-        title="NO₂ Over Time (Selected Cities)",
-        hover_data={
-            "month": False,
-            "month_name": True,
-            "year": True,
-            "NO2": ":.1f"
-        }
+        title="NO₂ Concentrations Over Time",
+        color_discrete_map=color_map  # EU27 red, others auto
     )
 
-    fig.update_layout(xaxis=dict(dtick="M12", tickformat="%Y"))
+    # ---- tooltip formatting ----
+    fig.update_traces(
+        hovertemplate="<b>City</b>=%{text}<br>" +
+                      "NO₂=%{y}<br>" +
+                      "month=%{customdata[0]}<br>" +
+                      "year=%{customdata[1]}",
+        text=df_t["City"],
+        customdata=df_t[["month_short", "year_only"]]
+    )
+
+    # ---- x-axis formatting ----
+    fig.update_layout(
+        xaxis=dict(dtick="M12", tickformat="%Y"),
+        legend_title_text="City"
+    )
 
     st.plotly_chart(fig, use_container_width=True)
 
