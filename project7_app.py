@@ -106,36 +106,58 @@ with tab1:
 with tab2:
     st.header("🏙️ Monthly NO₂ Levels by European Capitals")
 
-    selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=7)
-    selected_month = st.selectbox("Select Month:", list(range(1, 13)), index=9)
+    # Month name list
+    month_names = {
+        1: "January", 2: "February", 3: "March", 4: "April",
+        5: "May", 6: "June", 7: "July", 8: "August",
+        9: "September", 10: "October", 11: "November", 12: "December"
+    }
 
+    # Select year
+    selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=7)
+
+    # Select month by name
+    selected_month_name = st.selectbox(
+        "Select Month:",
+        list(month_names.values()),
+        index=1  # February (just default)
+    )
+
+    # Convert back to month number
+    selected_month = [num for num, name in month_names.items() if name == selected_month_name][0]
+
+    # Filter data
     df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)].copy()
 
     # EU27 mean value
     eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
 
-    # Sort by NO2 decreasing
+    # Sort cities by NO2 descending
     df_m = df_m.sort_values("NO2", ascending=False)
 
-    # Month label
-    month_name = pd.to_datetime(f"{selected_year}-{selected_month}-01").strftime("%B %Y")
+    # Chart title month
+    month_title = selected_month_name + " " + str(selected_year)
 
+    # Plot
     fig2 = px.bar(
         df_m,
         x="City",
         y="NO2",
-        color="NO2",                            # ← Same logic as correlation tab
-        color_continuous_scale="RdYlGn_r",      # ← EXACT SAME PALETTE
-        title=f"NO₂ Levels by City — {month_name}"
+        color="NO2",
+        color_continuous_scale="RdYlGn_r",  # same palette as correlation
+        title=f"NO₂ Levels by City — {month_title}"
     )
 
-    # Add horizontal line for EU average
-    fig2.add_hline(y=eu_value, line_dash="dash", line_color="black",
-                   annotation_text="EU27 average", annotation_position="top left")
-
-    fig2.update_layout(
-        xaxis_tickangle=-60
+    # EU average line
+    fig2.add_hline(
+        y=eu_value,
+        line_dash="dash",
+        line_color="black",
+        annotation_text="EU27 average",
+        annotation_position="top left"
     )
+
+    fig2.update_layout(xaxis_tickangle=-60)
 
     st.plotly_chart(fig2, use_container_width=True)
 
