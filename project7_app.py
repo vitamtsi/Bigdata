@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="Interactive Data Exploration of Air Pollution Across European Capital Cities (2018–2025)", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="NO₂concentrations across European capital cities", page_icon="🌍", layout="wide")
 
 # --------------------------------------------------------
 # LOAD DATA
@@ -22,7 +22,7 @@ st.title("🌍 European NO₂ Dashboard (2018–2025)")
 #  TABS
 # ========================================================
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📈 Dynamics of NO₂ Across European Capitals",
+    "📈 NO₂ Over Time",
     "🏙️ NO₂ Levels by City",
     "📉 Correlation (Time vs NO₂)",
     "🍁 Seasonal Variation"
@@ -49,7 +49,7 @@ with tab1:
 
     fig = px.line(
         df_t,
-        x="Year",
+        x="month",
         y="NO2",
         color="City",
         markers=True,
@@ -121,39 +121,3 @@ with tab3:
     st.plotly_chart(fig3, use_container_width=True)
 
 # ========================================================
-# TAB 4 — SEASONAL VARIATION (with custom season colors)
-# ========================================================
-with tab4:
-    st.header("🍁 Seasonal Variation of NO₂ Concentration")
-
-    # Assign seasons manually
-    def assign_season(m):
-        if m in [12, 1, 2]:
-            return "Winter"
-        elif m in [3, 4, 5]:
-            return "Spring"
-        elif m in [6, 7, 8]:
-            return "Summer"
-        else:
-            return "Autumn"
-
-    df["season"] = df["month_num"].apply(assign_season)
-
-    season_colors = {
-        "Winter": "purple",
-        "Spring": "gold",
-        "Summer": "green",
-        "Autumn": "orange"
-    }
-
-    fig4 = px.box(
-        df,
-        x="season",
-        y="NO2",
-        color="season",
-        color_discrete_map=season_colors,
-        category_orders={"season": ["Winter", "Spring", "Summer", "Autumn"]},
-        title="Seasonal Variation of NO₂ Concentration in European Capitals"
-    )
-
-    st.plotly_chart(fig4, use_container_width=True)
