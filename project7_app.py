@@ -238,3 +238,147 @@ with tab4:
     )
 
     st.plotly_chart(fig4, use_container_width=True)
+
+# ========================================================
+# TAB 5 — ML-BASED NO₂ PREDICTION
+# ========================================================
+with tab5:
+    st.header("🤖 Machine Learning Prediction of NO₂ Concentration")
+
+    st.write(
+        "This tool uses the Random Forest model trained in Project 5 to predict future NO₂ "
+        "concentrations based on seasonal patterns, temporal features, and lagged pollution values."
+    )
+
+    # ----------------------------
+    # Load trained model
+    # ----------------------------
+    import joblib
+    model = joblib.load("no2_rf_pipeline.pkl")
+
+    # Required features:
+    required_features = [
+        "City", "season", "year", "month_num",
+        "dayofyear", "NO2_prev_month", "NO2_roll3"
+    ]
+
+    st.subheader("Input Parameters")
+
+    # --- user inputs ---
+    city = st.selectbox("Select City:", sorted(df["City"].unique()))
+    year = st.number_input("Prediction Year:", min_value=2018, max_value=2035, value=2024)
+    month_name = st.selectbox("Select Month:", 
+                              ["January","February","March","April","May","June",
+                               "July","August","September","October","November","December"])
+    
+    # convert month → number
+    month_map = {
+        "January":1,"February":2,"March":3,"April":4,"May":5,"June":6,
+        "July":7,"August":8,"September":9,"October":10,"November":11,"December":12
+    }
+    month_num = month_map[month_name]
+
+    # derive seasonal category
+    def get_season(m):
+        if m in [12,1,2]:
+            return 1  # winter
+        elif m in [3,4,5]:
+            return 2  # spring
+        elif m in [6,7,8]:
+            return 3  # summer
+        else:
+            return 4  # autumn
+
+    season = get_season(month_num)
+
+    # calculate day of year
+    import datetime
+    dayofyear = datetime.datetime(year, month_num, 1).timetuple().tm_yday
+
+    # estimate previous month NO2 automatically from dataset
+    df_city = df[df["City"] == city].sort_values("month")
+
+    # previous month date
+    if month_num == 1:
+        prev_year = year - 1
+        prev_month = 12
+    else:
+        prev_year = year
+        prev_month = month_num - 1
+
+    # find NO2_prev_month
+    prev_value = df_city[
+        (df_city["month"].dt.year == prev_year) &
+        (df_city["month"].dt.month == prev_month)
+    ]["NO2"]
+
+    if len(prev_value) > 0:
+        NO2_prev_month = prev_value.iloc[0]
+    else:
+        NO2_prev_month = float(df_city["NO2"].mean())  # fallback if no data
+
+    # rolling mean (3 months)
+    df_city["prev3"] = df_city["NO2"].rolling(3).mean()
+    roll_value = df_city[
+        (df_city["month"].dt.year == prev_year) &
+        (df_city["month"].dt.month == prev_month)
+    ]["prev3"]
+
+    if len(roll_value) > 0:
+        NO2_roll3 = roll_value.iloc[0]
+    else:
+        NO2_roll3 = float(df_city["NO2"].rolling(3).mean().iloc[-1])
+
+    st.write("Automatically derived features:")
+    st.write(f"• Previous month NO₂: **{NO2_prev_month:.1f}** µg/m³")  
+    st.write(f"• 3-month rolling mean: **{NO2_roll3:.1f}** µg/m³")  
+    st.write(f"• Season (1–4): **{season}**")  
+    st.write(f"• Day of year: **{dayofyear}**")
+
+    # build dataframe for prediction
+    input_data = {
+        "City": city,
+        "season": season,
+        "year": year,
+        "month_num": month_num,
+        "dayofyear": dayofyear,
+        "NO2_prev_month": NO2_prev_month,
+        "NO2_roll3": NO2_roll3
+    }
+
+    input_df = pd.DataFrame([input_data], columns=required_features)
+
+    # ----------- prediction button -----------
+    if st.button("Predict NO₂ Level"):
+        pred = model.predict(input_df)[0]
+
+        st.subheader("Predicted NO₂ Concentration")
+        st.metric(label="NO₂ (µg/m³)", value=f"{pred:.2f}")
+
+        # compare to EU27 mean
+        eu_mean = df[df["City"]=="EU27 (aggregate)"]["NO2"].mean()
+
+        if pred > eu_mean + 5:
+            color = "red"
+            msg = "Above EU27 average — higher pollution expected"
+        elif pred < eu_mean - 5:
+            color = "green"
+            msg = "Below EU27 average — lower pollution expected"
+        else:
+            color = "gold"
+            msg = "Close to EU27 average"
+
+        st.markdown(f"### <span style='color:{color}'>{msg}</span>", unsafe_allow_html=True)
+
+        # show comparison bar
+        compare_df = pd.DataFrame({
+            "Category": ["Prediction", "EU27 Average"],
+            "NO2": [pred, eu_mean]
+        })
+
+        fig_pred = px.bar(compare_df, x="Category", y="NO2",
+                          color="NO2",
+                          color_continuous_scale="RdYlGn_r",
+                          title="Prediction vs EU27 Long-Term Average")
+
+        st.plotly_chart(fig_pred, use_container_width=True)
