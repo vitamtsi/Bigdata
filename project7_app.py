@@ -34,18 +34,25 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("📈 Dynamics of NO₂concentrations across European capital cities")
 
-    # --- Multi-city selector ---
+    # --- Default selections ---
+    default_cities = [
+        "EU27 (aggregate)",
+        "Riga (Latvia)",
+        "Tallinn (Estonia)",
+        "Vilnius (Lithuania)"
+    ]
+
     cities = st.multiselect(
         "Select cities:",
         sorted(df["City"].unique()),
-        default=["EU27 (aggregate)", "Riga (Latvia)", "Tallinn (Estonia)"]
+        default=default_cities
     )
 
     # Put EU27 always first if selected
     if "EU27 (aggregate)" in cities:
         cities = ["EU27 (aggregate)"] + [c for c in cities if c != "EU27 (aggregate)"]
 
-    # --- Year range slider ---
+    # --- Year slider ---
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
     # --- Filter data ---
@@ -54,34 +61,44 @@ with tab1:
         (df["year"].between(years[0], years[1]))
     ].copy()
 
-    # --- Add short month name for tooltip ---
-    df_t["month_short"] = df_t["month"].dt.strftime("%b")   # Jan, Feb, Mar
+    df_t["month_short"] = df_t["month"].dt.strftime("%b")   # Jan, Feb, ...
 
-    # --- Custom colors: EU27 ALWAYS RED ---
-    colors = {c: "red" if c == "EU27 (aggregate)" else None for c in cities}
+    # ----------------------------------------------------
+    # FIXED COLORS – EU27 ALWAYS RED, OTHERS NEVER RED
+    # ----------------------------------------------------
+    fixed_colors = {
+        "EU27 (aggregate)": "red",
+        "Riga (Latvia)": "#1f77b4",      # blue
+        "Tallinn (Estonia)": "#2ca02c",  # green
+        "Vilnius (Lithuania)": "#ff7f0e" # orange
+    }
 
-    # --- Plot ---
+    # Anything else gets automatic colors
+    def get_color(city):
+        return fixed_colors.get(city, None)
+
+    # --- Create plot ---
     fig = px.line(
         df_t,
-        x="month",          # <-- X ASS = DATETIME → parādās Jan/Feb/Mar
+        x="month",
         y="NO2",
         color="City",
         markers=True,
         hover_data={
             "City": True,
             "NO2": ":.2f",
-            "month": False,
-            "month_short": True
+            "month_short": True,
+            "month": False
         },
         title="Monthly NO₂ Concentrations Over Time"
     )
 
-    # Apply custom colors (EU27 = RED)
+    # Apply custom colors
     fig.for_each_trace(
-        lambda t: t.update(line=dict(color=colors.get(t.name, t.line.color)))
+        lambda t: t.update(line=dict(color=get_color(t.name)))
     )
 
-    # --- X-axis formatting to show months nicely ---
+    # --- X axis formatting ---
     fig.update_xaxes(
         dtick="M1",
         tickformat="%b\n%Y",
