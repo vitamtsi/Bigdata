@@ -34,7 +34,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("📈 Dynamics of NO₂concentrations across European capital cities")
 
-    # Prepare dropdown with priority order
+    # Priority cities shown first
     priority_cities = [
         "EU27 (aggregate)",
         "Riga (Latvia)",
@@ -42,48 +42,38 @@ with tab1:
         "Tallinn (Estonia)"
     ]
 
-    # All cities, sorted with priority ones first
     other_cities = sorted([c for c in df["City"].unique() if c not in priority_cities])
     ordered_cities = priority_cities + other_cities
 
-    # Default selected cities
-    default_selection = priority_cities
-
-    # UI: City multiselect
     cities = st.multiselect(
         "Select cities:",
         ordered_cities,
-        default=default_selection
+        default=priority_cities
     )
 
-    # UI: Year range (start from 2023)
     years = st.slider("Select year range:", 2018, 2025, (2023, 2025))
 
-    # Filter data
     df_t = df[
         (df["City"].isin(cities)) &
         (df["year"].between(years[0], years[1]))
     ].copy()
 
-    # Create month_short for labels
     df_t["month_short"] = df_t["month"].dt.strftime("%b")
     df_t["year"] = df_t["month"].dt.year
 
-    # Define consistent colors
+    # COLOR MAP — EU27 ALWAYS RED
     base_colors = px.colors.qualitative.Set2
     color_map = {city: base_colors[i % len(base_colors)] for i, city in enumerate(ordered_cities)}
-
-    # Override EU27 color to red
     color_map["EU27 (aggregate)"] = "red"
 
-    # Create line chart
+    # --- BUILD INITIAL FIG ---
     fig = px.line(
         df_t,
         x="month",
         y="NO2",
         color="City",
-        markers=True,
         color_discrete_map=color_map,
+        markers=True,
         hover_data={
             "City": True,
             "NO2": True,
@@ -94,26 +84,27 @@ with tab1:
         title="NO₂ Over Time (Selected Cities)"
     )
 
-    # Sort traces so EU27 is always first
-    sorted_traces = sorted(fig.data, key=lambda t: 0 if t.name == "EU27 (aggregate)" else 1)
+    # --- SORT HOVER ORDER ---
+    # Sort traces at each x (month) by descending NO2 value
+    # EU27 gets absolute top priority
+    sorted_traces = sorted(
+        fig.data,
+        key=lambda t: (
+            0 if t.name == "EU27 (aggregate)" else 1,
+            -max(t.y)  # descending by NO2
+        )
+    )
     fig.data = tuple(sorted_traces)
 
-    # X-axis formatting to show months
-    fig.update_xaxes(
-        tickformat="%b\n%Y",
-        showgrid=True
-    )
-
-    # Grid lines both directions
+    # AXIS FORMATTING
+    fig.update_xaxes(tickformat="%b\n%Y", showgrid=True)
     fig.update_yaxes(showgrid=True)
+
     fig.update_layout(
         hovermode="x unified",
-        plot_bgcolor="white",
-        xaxis=dict(showgrid=True),
-        yaxis=dict(showgrid=True)
+        plot_bgcolor="white"
     )
 
-    # Show chart
     st.plotly_chart(fig, use_container_width=True)
 # ========================================================
 # TAB 2 — CITY MONTHLY LEVELS 
