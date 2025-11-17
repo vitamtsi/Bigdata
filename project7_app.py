@@ -47,17 +47,24 @@ with tab1:
         (df["year"].between(years[0], years[1]))
     ]
 
-    fig = px.line(
-        df_t,
-        x="month",
-        y="NO2",
-        color="City",
-        markers=True,
-        title="NO₂ Over Time (Selected Cities)"
-    )
-    fig.update_layout(xaxis=dict(dtick="M12", tickformat="%Y"))
+  fig = px.line(
+    df_t,
+    x="month",
+    y="NO2",
+    color="City",
+    markers=True,
+    title="NO₂ Over Time (Selected Cities)",
+    hover_data={
+        "month": False,      # paslēpjam default
+        "month_name": True,  # rādam mēneša nosaukumu
+        "year": True,
+        "NO2": ":.1f"
+    }
+)
 
-    st.plotly_chart(fig, use_container_width=True)
+# Izveidojam jaunu kolonnu ar mēneša nosaukumu
+df_t["month_name"] = df_t["month"].dt.strftime("%B %Y")
+df_t["year"] = df_t["month"].dt.year
 
 # ========================================================
 # TAB 2 — CITY MONTHLY LEVELS
