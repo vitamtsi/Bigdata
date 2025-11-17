@@ -49,7 +49,7 @@ with tab1:
 
     fig = px.line(
         df_t,
-        x="month",
+        x="Year",
         y="NO2",
         color="City",
         markers=True,
