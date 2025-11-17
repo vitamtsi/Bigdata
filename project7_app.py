@@ -124,7 +124,7 @@ with tab2:
         x="City",
         y="NO2",
         color="color",
-        color_discrete_map={"red": "above EU", "green": "bellow EU", "yellow": "average"},
+        color_discrete_map={"red": "red", "green": "green", "yellow": "yellow"},
         title=f"NO₂ Levels by City — {month_name}"
     )
 
