@@ -34,7 +34,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("📈 Dynamics of NO₂concentrations across European capital cities")
 
-    # ---- reorder city list so EU27 is always first ----
+    # ---- reorder so EU27 always first ----
     all_cities = sorted(df["City"].unique())
     reordered_cities = ["EU27 (aggregate)"] + [c for c in all_cities if c != "EU27 (aggregate)"]
 
@@ -47,20 +47,27 @@ with tab1:
     # ---- year range ----
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
-    # ---- filter data ----
+    # ---- filter ----
     df_t = df[
         (df["City"].isin(cities)) &
         (df["year"].between(years[0], years[1]))
     ].copy()
 
-    # ---- add formatted month labels ----
+    # ---- short month & year ----
     df_t["month_short"] = df_t["month"].dt.strftime("%b")
     df_t["year_only"] = df_t["month"].dt.year
 
-    # ---- color rules ----
-    color_map = {
-        "EU27 (aggregate)": "red"
-    }
+    # ---- manual color map ----
+    # EU27 red, others get neutral palette (no red)
+    non_red_palette = px.colors.qualitative.Dark24  # safe palette without red tones
+    non_red_palette = [c for c in non_red_palette if "FF0000" not in c and "#FF" not in c]
+
+    # Build dynamic color map
+    color_map = {"EU27 (aggregate)": "red"}
+
+    other_cities = [c for c in cities if c != "EU27 (aggregate)"]
+    for i, city in enumerate(other_cities):
+        color_map[city] = non_red_palette[i % len(non_red_palette)]
 
     fig = px.line(
         df_t,
@@ -69,10 +76,10 @@ with tab1:
         color="City",
         markers=True,
         title="NO₂ Concentrations Over Time",
-        color_discrete_map=color_map  # EU27 red, others auto
+        color_discrete_map=color_map
     )
 
-    # ---- tooltip formatting ----
+    # ---- tooltip ----
     fig.update_traces(
         hovertemplate="<b>City</b>=%{text}<br>" +
                       "NO₂=%{y}<br>" +
@@ -82,7 +89,7 @@ with tab1:
         customdata=df_t[["month_short", "year_only"]]
     )
 
-    # ---- x-axis formatting ----
+    # ---- x-axis ----
     fig.update_layout(
         xaxis=dict(dtick="M12", tickformat="%Y"),
         legend_title_text="City"
