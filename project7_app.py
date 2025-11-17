@@ -34,68 +34,65 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("📈 Dynamics of NO₂concentrations across European capital cities")
 
-    # ---- reorder so EU27 always first ----
-    all_cities = sorted(df["City"].unique())
-    reordered_cities = ["EU27 (aggregate)"] + [c for c in all_cities if c != "EU27 (aggregate)"]
-
+    # --- Multi-city selector ---
     cities = st.multiselect(
         "Select cities:",
-        reordered_cities,
+        sorted(df["City"].unique()),
         default=["EU27 (aggregate)", "Riga (Latvia)", "Tallinn (Estonia)"]
     )
 
+    # Put EU27 always first if selected
+    if "EU27 (aggregate)" in cities:
+        cities = ["EU27 (aggregate)"] + [c for c in cities if c != "EU27 (aggregate)"]
+
+    # --- Year range slider ---
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
+    # --- Filter data ---
     df_t = df[
         (df["City"].isin(cities)) &
         (df["year"].between(years[0], years[1]))
     ].copy()
 
-    # Short month labels (Jan, Feb, …)
-    df_t["month"] = df_t["month"].dt.strftime("%b %Y")
+    # --- Add short month name for tooltip ---
+    df_t["month_short"] = df_t["month"].dt.strftime("%b")   # Jan, Feb, Mar
 
-    # ---- Color mapping (EU27 fixed red) ----
-    non_red_palette = px.colors.qualitative.Dark24
-    non_red_palette = [c for c in non_red_palette if "FF0000" not in c]  # remove red
+    # --- Custom colors: EU27 ALWAYS RED ---
+    colors = {c: "red" if c == "EU27 (aggregate)" else None for c in cities}
 
-    color_map = {"EU27 (aggregate)": "red"}
-    other_cities = [c for c in cities if c != "EU27 (aggregate)"]
-
-    for i, city in enumerate(other_cities):
-        color_map[city] = non_red_palette[i % len(non_red_palette)]
-
-    # ---- Plot ----
+    # --- Plot ---
     fig = px.line(
         df_t,
-        x="month_label",
+        x="month",          # <-- X ASS = DATETIME → parādās Jan/Feb/Mar
         y="NO2",
         color="City",
         markers=True,
-        title="NO₂ Concentrations Across Time",
-        color_discrete_map=color_map
+        hover_data={
+            "City": True,
+            "NO2": ":.2f",
+            "month": False,
+            "month_short": True
+        },
+        title="Monthly NO₂ Concentrations Over Time"
     )
 
-    # ---- Hover info ----
-    fig.update_traces(
-        hovertemplate="<b>City</b>=%{text}<br>" +
-                      "NO₂=%{y}<br>" +
-                      "Month=%{x}",
-        text=df_t["City"]
+    # Apply custom colors (EU27 = RED)
+    fig.for_each_trace(
+        lambda t: t.update(line=dict(color=colors.get(t.name, t.line.color)))
     )
 
-    # ---- Improve grid: horizontal + vertical ----
+    # --- X-axis formatting to show months nicely ---
+    fig.update_xaxes(
+        dtick="M1",
+        tickformat="%b\n%Y",
+        showgrid=True,
+        gridcolor="lightgray"
+    )
+
     fig.update_layout(
-        xaxis=dict(
-            showgrid=True,
-            gridcolor="lightgray",
-            tickangle=-45
-        ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor="lightgray"
-        ),
-        plot_bgcolor="white",
-        legend_title_text="City"
+        xaxis_title="Month",
+        yaxis_title="NO₂ (µg/m³)",
+        hovermode="x unified"
     )
 
     st.plotly_chart(fig, use_container_width=True)
