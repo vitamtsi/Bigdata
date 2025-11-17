@@ -5,84 +5,89 @@ import altair as alt
 st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide")
 
 # --------------------------------------------------------
-# 1) LOAD DATA
+# LOAD DATA
 # --------------------------------------------------------
 @st.cache_data
 def load_data():
     return pd.read_csv("clean_no2_long.csv", parse_dates=["month"])
 
 df = load_data()
+df["year"] = df["month"].dt.year
+df["month_num"] = df["month"].dt.month
+
+st.title("🌍 European NO₂ Dashboard (2018–2025)")
 
 # --------------------------------------------------------
 # SIDEBAR FILTERS
 # --------------------------------------------------------
 st.sidebar.header("Filters")
 
-# MULTI-SELECT CITIES
-cities = st.sidebar.multiselect(
-    "Select cities:",
-    options=sorted(df["City"].unique()),
-    default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"]
-)
+cities = sorted(df["City"].unique())
+selected_cities = st.sidebar.multiselect("Select Cities:", cities, default=cities[:5])
 
-# ----- FIX: USE A SLIDER INSTEAD OF CALENDAR -----
-min_date = df["month"].min()
-max_date = df["month"].max()
+years = sorted(df["year"].unique())
+selected_years = st.sidebar.slider("Select Year Range:", min_value=min(years), max_value=max(years),
+                                   value=(min(years), max(years)))
 
-date_range = st.sidebar.slider(
-    "Select date range (years):",
-    min_value=min_date.to_pydatetime(),
-    max_value=max_date.to_pydatetime(),
-    value=(min_date.to_pydatetime(), max_date.to_pydatetime())
-)
+df_filtered = df[
+    (df["City"].isin(selected_cities)) &
+    (df["year"] >= selected_years[0]) &
+    (df["year"] <= selected_years[1])
+]
 
 # --------------------------------------------------------
-# APPLY FILTERS
+# 1) AVERAGE NO₂ 2018–2025
 # --------------------------------------------------------
-filtered = df.copy()
+st.subheader("📊 Average NO₂ Concentration by European Capital (2018–2025)")
 
-if cities:
-    filtered = filtered[filtered["City"].isin(cities)]
-
-start, end = date_range
-filtered = filtered[(filtered["month"] >= start) &
-                    (filtered["month"] <= end)]
-
-# --------------------------------------------------------
-# TITLE
-# --------------------------------------------------------
-st.title("🌍 NO₂ Data Explorer")
-st.write("Interactive dashboard to explore European NO₂ trends over time.")
-
-# --------------------------------------------------------
-# LINE CHART WITH YEAR TICKS
-# --------------------------------------------------------
-if filtered.empty:
-    st.warning("No data available for selected filters.")
-else:
-    chart = (
-        alt.Chart(filtered)
-        .mark_line()
-        .encode(
-            x=alt.X(
-                "month:T",
-                axis=alt.Axis(
-                    format="%Y",         # show only YEAR
-                    tickCount="year",     # yearly ticks
-                    labelAngle=0
-                )
-            ),
-            y="NO2:Q",
-            color="City:N",
-            tooltip=["City", "month", "NO2"]
-        )
-        .properties(height=400)
+avg_chart = (
+    alt.Chart(df_filtered)
+    .mark_bar()
+    .encode(
+        x=alt.X("City:N", sort="-y"),
+        y=alt.Y("mean(NO2):Q", title="Average NO₂ (µg/m³)"),
+        color="City:N",
+        tooltip=["City", "mean(NO2)"]
     )
-
-    st.altair_chart(chart, use_container_width=True)
+)
+st.altair_chart(avg_chart, use_container_width=True)
 
 # --------------------------------------------------------
-# SHOW RAW DATA
+# 2) NO₂ LEVELS FOR SEPTEMBER 2025 ONLY
 # --------------------------------------------------------
-with st.expander("Show filtered data table"):
-    st.dataframe(filtered)
+st.subheader("🍂 NO₂ Levels by City in September 2025")
+
+df_sep25 = df[(df["year"] == 2025) & (df["month_num"] == 9)]
+
+sep_chart = (
+    alt.Chart(df_sep25)
+    .mark_bar()
+    .encode(
+        x=alt.X("City:N", sort="-y"),
+        y="NO2:Q",
+        color="City:N",
+        tooltip=["City", "NO2"]
+    )
+)
+
+st.altair_chart(sep_chart, use_container_width=True)
+
+# --------------------------------------------------------
+# 3) CORRELATION BETWEEN TIME AND NO₂
+# --------------------------------------------------------
+st.subheader("📈 Correlation Between Time and NO₂ Concentration")
+
+trend_chart = (
+    alt.Chart(df_filtered)
+    .mark_line(point=True)
+    .encode(
+        x="month:T",
+        y="NO2:Q",
+        color="City:N",
+        tooltip=["City", "month", "NO2"]
+    )
+)
+
+st.altair_chart(trend_chart, use_container_width=True)
+
+st.success("Dashboard loaded successfully! 🚀")
