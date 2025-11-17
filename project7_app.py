@@ -104,19 +104,31 @@ with tab1:
 # TAB 2 — CITY MONTHLY LEVELS
 # ========================================================
 with tab2:
-    st.header("🏙️ NO₂ Levels by City")
+    st.header("🏙️ Monthly NO₂ Levels by European Capitals")
 
     selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=7)
     selected_month = st.selectbox("Select Month:", list(range(1, 13)), index=9)
 
-    df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)]
+    df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)].copy()
 
+    # EU27 mean value
     eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
 
-    df_m["color"] = df_m["NO2"].apply(
-        lambda x: "yellow" if x == eu_value else ("red" if x > eu_value else "green")
-    )
+    # Assign correct colors
+    def color_rule(x):
+        if x > eu_value:
+            return "red"         # above EU average
+        elif x < eu_value:
+            return "green"       # below EU average
+        else:
+            return "yellow"      # exactly EU average
 
+    df_m["color"] = df_m["NO2"].apply(color_rule)
+
+    # Sort bars by descending NO2 level
+    df_m = df_m.sort_values("NO2", ascending=False)
+
+    # Month label
     month_name = pd.to_datetime(f"{selected_year}-{selected_month}-01").strftime("%B %Y")
 
     fig2 = px.bar(
@@ -124,11 +136,19 @@ with tab2:
         x="City",
         y="NO2",
         color="color",
-        color_discrete_map={"red": "red", "green": "green", "yellow": "yellow"},
+        color_discrete_map={
+            "red": "red",
+            "green": "green",
+            "yellow": "gold"
+        },
         title=f"NO₂ Levels by City — {month_name}"
     )
 
-    fig2.update_layout(xaxis_tickangle=-60)
+    fig2.update_layout(
+        xaxis_tickangle=-60,
+        showlegend=False
+    )
+
     st.plotly_chart(fig2, use_container_width=True)
 
 # ========================================================
