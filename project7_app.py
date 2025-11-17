@@ -121,7 +121,7 @@ with tab3:
     st.plotly_chart(fig3, use_container_width=True)
 
 # ========================================================
-# TAB 4 — SEASONAL VARIATION (with custom season colors)
+# TAB 4 — SEASONAL VARIATION (with City tooltip)
 # ========================================================
 with tab4:
     st.header("🍁 Seasonal Variation of NO₂ Concentration")
@@ -151,9 +151,12 @@ with tab4:
         x="season",
         y="NO2",
         color="season",
+        hover_data=["City", "month", "year", "NO2"],
         color_discrete_map=season_colors,
         category_orders={"season": ["Winter", "Spring", "Summer", "Autumn"]},
         title="Seasonal Variation of NO₂ Concentration in European Capitals"
     )
+
+    fig4.update_traces(boxpoints="all", jitter=0.3)  # <- shows points too
 
     st.plotly_chart(fig4, use_container_width=True)
