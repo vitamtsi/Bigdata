@@ -34,21 +34,19 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("📈 NO₂ Over Time")
 
-    # Multiselect cities
     cities = st.multiselect(
         "Select cities:",
         sorted(df["City"].unique()),
         default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"]
     )
 
-    # Year range slider
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
-    # Filter data
-    df_t = df[(df["City"].isin(cities)) &
-              (df["year"].between(years[0], years[1]))]
+    df_t = df[
+        (df["City"].isin(cities)) &
+        (df["year"].between(years[0], years[1]))
+    ]
 
-    # Line chart
     fig = px.line(
         df_t,
         x="month",
@@ -72,10 +70,8 @@ with tab2:
 
     df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)]
 
-    # EU27 value
     eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
 
-    # Color rule
     df_m["color"] = df_m["NO2"].apply(
         lambda x: "yellow" if x == eu_value else ("red" if x > eu_value else "green")
     )
@@ -95,7 +91,7 @@ with tab2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # ========================================================
-# TAB 3 — CORRELATION
+# TAB 3 — CORRELATION (AR APGRIEZTU KRĀSU SKALU)
 # ========================================================
 with tab3:
     st.header("📉 Correlation Between Time and NO₂ (2018–2025)")
@@ -116,7 +112,8 @@ with tab3:
         x="City",
         y="correlation",
         color="correlation",
-        color_continuous_scale="RdYlGn",
+        # ŠEIT GALVENĀ IZMAIŅA:
+        color_continuous_scale="RdYlGn_r",
         title="Correlation Between Time and NO₂ Concentration"
     )
 
@@ -124,16 +121,39 @@ with tab3:
     st.plotly_chart(fig3, use_container_width=True)
 
 # ========================================================
-# TAB 4 — SEASONAL VARIATION (NO SEASON COLUMN NEEDED)
+# TAB 4 — SEASONAL VARIATION (with custom season colors)
 # ========================================================
 with tab4:
-    st.header("🍁 Seasonal Variation of NO₂ (by month number)")
+    st.header("🍁 Seasonal Variation of NO₂ Concentration")
+
+    # Assign seasons manually
+    def assign_season(m):
+        if m in [12, 1, 2]:
+            return "Winter"
+        elif m in [3, 4, 5]:
+            return "Spring"
+        elif m in [6, 7, 8]:
+            return "Summer"
+        else:
+            return "Autumn"
+
+    df["season"] = df["month_num"].apply(assign_season)
+
+    season_colors = {
+        "Winter": "purple",
+        "Spring": "gold",
+        "Summer": "green",
+        "Autumn": "orange"
+    }
 
     fig4 = px.box(
         df,
-        x="month_num",
+        x="season",
         y="NO2",
-        title="Seasonal Variation of NO₂ (Using Month Number Instead of Season)"
+        color="season",
+        color_discrete_map=season_colors,
+        category_orders={"season": ["Winter", "Spring", "Summer", "Autumn"]},
+        title="Seasonal Variation of NO₂ Concentration in European Capitals"
     )
 
     st.plotly_chart(fig4, use_container_width=True)
