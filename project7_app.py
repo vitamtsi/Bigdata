@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(page_title="NO₂ Dashboard", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="NO₂concentrations across European capital cities", page_icon="🌍", layout="wide")
 
 # --------------------------------------------------------
 # LOAD DATA
