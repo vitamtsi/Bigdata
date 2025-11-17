@@ -22,18 +22,18 @@ st.sidebar.header("Filters")
 cities = st.sidebar.multiselect(
     "Select cities:",
     options=sorted(df["City"].unique()),
-    default=sorted(df["City"].unique())[:3]  # first 3 cities as default
+    default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"]
 )
 
-# DATE RANGE FILTER
-min_date = df["month"].min().to_pydatetime()
-max_date = df["month"].max().to_pydatetime()
+# ----- FIX: USE A SLIDER INSTEAD OF CALENDAR -----
+min_date = df["month"].min()
+max_date = df["month"].max()
 
-date_range = st.sidebar.date_input(
-    "Select date range:",
-    value=(min_date, max_date),
-    min_value=min_date,
-    max_value=max_date
+date_range = st.sidebar.slider(
+    "Select date range (years):",
+    min_value=min_date.to_pydatetime(),
+    max_value=max_date.to_pydatetime(),
+    value=(min_date.to_pydatetime(), max_date.to_pydatetime())
 )
 
 # --------------------------------------------------------
@@ -45,30 +45,30 @@ if cities:
     filtered = filtered[filtered["City"].isin(cities)]
 
 start, end = date_range
-filtered = filtered[(filtered["month"] >= pd.to_datetime(start)) &
-                    (filtered["month"] <= pd.to_datetime(end))]
+filtered = filtered[(filtered["month"] >= start) &
+                    (filtered["month"] <= end)]
 
 # --------------------------------------------------------
 # TITLE
 # --------------------------------------------------------
 st.title("🌍 NO₂ Data Explorer")
-st.write("Filter cities and timeframe to explore NO₂ levels across Europe.")
+st.write("Interactive dashboard to explore European NO₂ trends over time.")
 
 # --------------------------------------------------------
-# LINE CHART (WITH YEAR TICKS)
+# LINE CHART WITH YEAR TICKS
 # --------------------------------------------------------
 if filtered.empty:
     st.warning("No data available for selected filters.")
 else:
-    line_chart = (
+    chart = (
         alt.Chart(filtered)
         .mark_line()
         .encode(
             x=alt.X(
                 "month:T",
                 axis=alt.Axis(
-                    format="%Y",        # Only show YEAR
-                    tickCount="year",   # Tick every year
+                    format="%Y",         # show only YEAR
+                    tickCount="year",     # yearly ticks
                     labelAngle=0
                 )
             ),
@@ -79,7 +79,7 @@ else:
         .properties(height=400)
     )
 
-    st.altair_chart(line_chart, use_container_width=True)
+    st.altair_chart(chart, use_container_width=True)
 
 # --------------------------------------------------------
 # SHOW RAW DATA
