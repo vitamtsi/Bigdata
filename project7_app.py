@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import sklearn
-import streamlit as st
+import joblib
+import numpy as np
 
 st.sidebar.write("⚙️ Streamlit sklearn version:", sklearn.__version__)
 
@@ -25,11 +26,12 @@ st.title("🌍 European NO₂ Dashboard (2018–2025)")
 # ========================================================
 #  TABS
 # ========================================================
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📈 NO₂ Over Time",
     "🏙️ NO₂ Levels by City",
     "📉 Correlation (Time vs NO₂)",
-    "🍁 Seasonal Variation"
+    "🍁 Seasonal Variation",
+    "🔮 Forecasting Model"
 ])
 
 # ========================================================
@@ -70,7 +72,6 @@ with tab1:
     color_map = {city: base_colors[i % len(base_colors)] for i, city in enumerate(ordered_cities)}
     color_map["EU27 (aggregate)"] = "red"
 
-    # --- BUILD INITIAL FIG ---
     fig = px.line(
         df_t,
         x="month",
@@ -88,19 +89,16 @@ with tab1:
         title="NO₂ Over Time (Selected Cities)"
     )
 
-    # --- SORT HOVER ORDER ---
-    # Sort traces at each x (month) by descending NO2 value
-    # EU27 gets absolute top priority
+    # SORT hover order
     sorted_traces = sorted(
         fig.data,
         key=lambda t: (
             0 if t.name == "EU27 (aggregate)" else 1,
-            -max(t.y)  # descending by NO2
+            -max(t.y)
         )
     )
     fig.data = tuple(sorted_traces)
 
-    # AXIS FORMATTING
     fig.update_xaxes(tickformat="%b\n%Y", showgrid=True)
     fig.update_yaxes(showgrid=True)
 
@@ -110,55 +108,46 @@ with tab1:
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
 # ========================================================
-# TAB 2 — CITY MONTHLY LEVELS 
+# TAB 2 — CITY MONTHLY LEVELS
 # ========================================================
 with tab2:
     st.header("🏙️ Monthly NO₂ Levels by European Capitals")
 
-    # Month name list
     month_names = {
         1: "January", 2: "February", 3: "March", 4: "April",
         5: "May", 6: "June", 7: "July", 8: "August",
         9: "September", 10: "October", 11: "November", 12: "December"
     }
 
-    # Select year
     selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=7)
 
-    # Select month by name
     selected_month_name = st.selectbox(
         "Select Month:",
         list(month_names.values()),
-        index=1  # February (just default)
+        index=1
     )
 
-    # Convert back to month number
     selected_month = [num for num, name in month_names.items() if name == selected_month_name][0]
 
-    # Filter data
     df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)].copy()
 
-    # EU27 mean value
     eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
 
-    # Sort cities by NO2 descending
     df_m = df_m.sort_values("NO2", ascending=False)
 
-    # Chart title month
     month_title = selected_month_name + " " + str(selected_year)
 
-    # Plot
     fig2 = px.bar(
         df_m,
         x="City",
         y="NO2",
         color="NO2",
-        color_continuous_scale="RdYlGn_r",  # same palette as correlation
+        color_continuous_scale="RdYlGn_r",
         title=f"NO₂ Levels by City — {month_title}"
     )
 
-    # EU average line
     fig2.add_hline(
         y=eu_value,
         line_dash="dash",
@@ -168,7 +157,6 @@ with tab2:
     )
 
     fig2.update_layout(xaxis_tickangle=-60)
-
     st.plotly_chart(fig2, use_container_width=True)
 
 # ========================================================
@@ -193,7 +181,6 @@ with tab3:
         x="City",
         y="correlation",
         color="correlation",
-        # ŠEIT GALVENĀ IZMAIŅA:
         color_continuous_scale="RdYlGn_r",
         title="Correlation Between Time and NO₂ Concentration"
     )
@@ -202,14 +189,11 @@ with tab3:
     st.plotly_chart(fig3, use_container_width=True)
 
 # ========================================================
-
-# ========================================================
-# TAB 4 — SEASONAL VARIATION (with custom season colors)
+# TAB 4 — SEASONAL VARIATION
 # ========================================================
 with tab4:
     st.header("🍁 Seasonal Variation of NO₂ Concentration")
 
-    # Assign seasons manually
     def assign_season(m):
         if m in [12, 1, 2]:
             return "Winter"
@@ -222,7 +206,6 @@ with tab4:
 
     df["season"] = df["month_num"].apply(assign_season)
 
-    # Custom season colors
     season_colors = {
         "Winter": "purple",
         "Spring": "gold",
@@ -242,3 +225,102 @@ with tab4:
     )
 
     st.plotly_chart(fig4, use_container_width=True)
+
+
+# ========================================================
+# TAB 5 — FORECASTING MODEL
+# ========================================================
+with tab5:
+    st.header("🔮 Forecasting Future NO₂ Concentrations")
+
+    st.write("This tab uses the trained Random Forest pipeline (Project 5) to forecast future monthly NO₂ values.")
+
+    # Try loading the model
+    try:
+        model = joblib.load("no2_rf_pipeline.pkl")
+        st.success("Model loaded successfully!")
+    except Exception as e:
+        st.error(f"Model could not be loaded: {e}")
+        st.stop()
+
+    # Load feature engineered dataset
+    try:
+        df_feat = pd.read_csv("no2_with_features.csv", parse_dates=["month"])
+    except:
+        st.error("Could not load no2_with_features.csv — upload it to the Streamlit app folder.")
+        st.stop()
+
+    # UI
+    city = st.selectbox("Select a city for prediction:", sorted(df_feat["City"].unique()))
+
+    horizon = st.slider("Forecast horizon (months):", 1, 12, 6)
+
+    st.subheader(f"Forecasting next {horizon} months for **{city}**")
+
+    # Filter last known values
+    city_df = df_feat[df_feat["City"] == city].sort_values("month")
+
+    last_row = city_df.iloc[-1]
+
+    preds = []
+    future_months = []
+
+    current_year = last_row["year"]
+    current_month_num = last_row["month_num"]
+    last_NO2 = last_row["NO2"]
+    last_prev = last_row["NO2_prev_month"]
+    last_roll3 = last_row["NO2_roll3"]
+    last_dayofyear = last_row["dayofyear"]
+
+    for i in range(1, horizon + 1):
+        future_month_num = ((current_month_num - 1 + i) % 12) + 1
+        extra_years = (current_month_num - 1 + i) // 12
+        future_year = current_year + extra_years
+
+        day_of_year = pd.Timestamp(future_year, future_month_num, 15).day_of_year
+
+        season_value = (
+            1 if future_month_num in [12, 1, 2] else
+            2 if future_month_num in [3, 4, 5] else
+            3 if future_month_num in [6, 7, 8] else
+            4
+        )
+
+        X = pd.DataFrame([{
+            "City": city,
+            "season": season_value,
+            "year": future_year,
+            "month_num": future_month_num,
+            "dayofyear": day_of_year,
+            "NO2_prev_month": last_NO2,
+            "NO2_roll3": last_roll3
+        }])
+
+        y_pred = model.predict(X)[0]
+
+        preds.append(y_pred)
+        future_months.append(f"{pd.Timestamp(future_year, future_month_num, 1).strftime('%b %Y')}")
+
+        last_roll3 = (last_roll3 * 3 - last_prev + y_pred) / 3
+        last_prev = last_NO2
+        last_NO2 = y_pred
+
+    # Table
+    forecast_df = pd.DataFrame({
+        "Month": future_months,
+        "Predicted NO2": preds
+    })
+
+    st.write("### 📅 Forecast Table")
+    st.dataframe(forecast_df)
+
+    # Chart
+    fig5 = px.line(
+        forecast_df,
+        x="Month",
+        y="Predicted NO2",
+        markers=True,
+        title=f"Forecasted NO₂ for {city}"
+    )
+
+    st.plotly_chart(fig5, use_container_width=True)
