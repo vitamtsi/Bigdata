@@ -34,100 +34,92 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header("📈 Dynamics of NO₂concentrations across European capital cities")
 
-    # --- Default selections ---
-    default_cities = [
-        "EU27 (aggregate)",
-        "Riga (Latvia)",
-        "Tallinn (Estonia)",
-        "Vilnius (Lithuania)"
-    ]
-
+    # ----- FILTER WIDGETS -----
     cities = st.multiselect(
         "Select cities:",
         sorted(df["City"].unique()),
-        default=default_cities
+        default=["Riga (Latvia)", "Tallinn (Estonia)", "EU27 (aggregate)"]
     )
 
-    # Put EU27 always first if selected
-    if "EU27 (aggregate)" in cities:
-        cities = ["EU27 (aggregate)"] + [c for c in cities if c != "EU27 (aggregate)"]
-
-    # --- Year slider ---
     years = st.slider("Select year range:", 2018, 2025, (2018, 2025))
 
-    # --- Filter data ---
+    # Filter dataset
     df_t = df[
         (df["City"].isin(cities)) &
         (df["year"].between(years[0], years[1]))
     ].copy()
 
-    df_t["month_short"] = df_t["month"].dt.strftime("%b")   # Jan, Feb, ...
+    # ----- Add short month labels -----
+    df_t["month_short"] = df_t["month"].dt.strftime("%b")
+    df_t["year_label"] = df_t["month"].dt.year.astype(str)
+    df_t["month_label"] = df_t["month"].dt.strftime("%Y, %b")
 
-    # ----------------------------------------------------
-    # FIXED COLORS – EU27 ALWAYS RED, OTHERS NEVER RED
-    # ----------------------------------------------------
-    fixed_colors = {
-        "EU27 (aggregate)": "red",
-        "Riga (Latvia)": "#1f77b4",      # blue
-        "Tallinn (Estonia)": "#2ca02c",  # green
-        "Vilnius (Lithuania)": "#ff7f0e" # orange
-    }
-
-    # Anything else gets automatic colors
-    def get_color(city):
-        return fixed_colors.get(city, None)
-
-    # --- Create plot ---
+    # ----- PLOT -----
     fig = px.line(
         df_t,
         x="month",
         y="NO2",
         color="City",
         markers=True,
-        hover_data={
-            "City": True,
-            "NO2": ":.2f",
-            "month_short": True,
-            "month": False
-        },
-        title="Monthly NO₂ Concentrations Over Time"
+        custom_data=["City", "NO2", "month_short", "year_label"],
+        title="NO₂ Over Time (Selected Cities)"
     )
 
-    # Apply custom colors
-    fig.for_each_trace(
-        lambda t: t.update(line=dict(color=get_color(t.name)))
-    )
-
-    # --- X axis formatting ---
+    # ----- Grid styling (rūtiņu burtnīca) -----
     fig.update_xaxes(
-        dtick="M1",
-        tickformat="%b\n%Y",
         showgrid=True,
-        gridcolor="lightgray"
+        gridcolor="lightgray",
+        dtick="M1",
+        tickformat="%b\n%Y"   # Jan (new line) 2020
+    )
+    fig.update_yaxes(showgrid=True, gridcolor="lightgray")
+
+    # ----- CUSTOM HOVER TEMPLATE -----
+    fig.update_traces(
+        hovertemplate=(
+            "City=%{customdata[0]}<br>"
+            "NO₂=%{customdata[1]:.1f}<br>"
+            "month=%{customdata[2]}<br>"
+            "year=%{customdata[3]}<extra></extra>"
+        )
     )
 
-    fig.update_layout(
-        xaxis_title="Month",
-        yaxis_title="NO₂ (µg/m³)",
-        hovermode="x unified"
-    )
+    # ============================================================
+    # ENFORCE FIXED ORDER + FIXED COLORS
+    # ============================================================
+    priority_order = [
+        "EU27 (aggregate)",
+        "Riga (Latvia)",
+        "Bucharest (Romania)",
+        "Tallinn (Estonia)"
+    ]
 
+    fixed_colors = {
+        "EU27 (aggregate)": "red",
+        "Riga (Latvia)": "blue",
+        "Tallinn (Estonia)": "green",
+        "Bucharest (Romania)": "purple"
+    }
+
+    sorted_traces = []
+
+    # 1. Add priority cities in fixed order
+    for city in priority_order:
+        for tr in fig.data:
+            if tr.name == city:
+                if city in fixed_colors:
+                    tr.line.color = fixed_colors[city]
+                sorted_traces.append(tr)
+
+    # 2. Add remaining cities with default Plotly colors
+    for tr in fig.data:
+        if tr.name not in priority_order:
+            sorted_traces.append(tr)
+
+    fig.data = tuple(sorted_traces)
+
+    # ----- DISPLAY -----
     st.plotly_chart(fig, use_container_width=True)
-
-# ============================================================
-# SORT HOVER ORDER BY NO2 VALUE (DESCENDING)
-# ============================================================
-
-# Compute mean NO2 per trace to determine ordering
-trace_means = {}
-for trace in fig.data:
-    trace_means[trace.name] = np.nanmean(trace.y)
-
-# Reorder traces: highest NO2 first
-fig.data = tuple(
-    sorted(fig.data, key=lambda t: trace_means[t.name], reverse=True)
-)
-
 # ========================================================
 # TAB 2 — CITY MONTHLY LEVELS 
 # ========================================================
