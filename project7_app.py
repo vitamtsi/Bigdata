@@ -101,7 +101,7 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
 # ========================================================
-# TAB 2 — CITY MONTHLY LEVELS
+# TAB 2 — CITY MONTHLY LEVELS (same colormap as correlation)
 # ========================================================
 with tab2:
     st.header("🏙️ Monthly NO₂ Levels by European Capitals")
@@ -114,18 +114,7 @@ with tab2:
     # EU27 mean value
     eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
 
-    # Assign correct colors
-    def color_rule(x):
-        if x > eu_value:
-            return "red"         # above EU average
-        elif x < eu_value:
-            return "green"       # below EU average
-        else:
-            return "yellow"      # exactly EU average
-
-    df_m["color"] = df_m["NO2"].apply(color_rule)
-
-    # Sort bars by descending NO2 level
+    # Sort by NO2 decreasing
     df_m = df_m.sort_values("NO2", ascending=False)
 
     # Month label
@@ -135,18 +124,17 @@ with tab2:
         df_m,
         x="City",
         y="NO2",
-        color="color",
-        color_discrete_map={
-            "red": "red",
-            "green": "green",
-            "yellow": "gold"
-        },
+        color="NO2",                            # ← Same logic as correlation tab
+        color_continuous_scale="RdYlGn_r",      # ← EXACT SAME PALETTE
         title=f"NO₂ Levels by City — {month_name}"
     )
 
+    # Add horizontal line for EU average
+    fig2.add_hline(y=eu_value, line_dash="dash", line_color="black",
+                   annotation_text="EU27 average", annotation_position="top left")
+
     fig2.update_layout(
-        xaxis_tickangle=-60,
-        showlegend=False
+        xaxis_tickangle=-60
     )
 
     st.plotly_chart(fig2, use_container_width=True)
