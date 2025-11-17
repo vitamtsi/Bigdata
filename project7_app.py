@@ -32,7 +32,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # TAB 1 — TIME SERIES
 # ========================================================
 with tab1:
-    st.header("📈 NO₂ Over Time")
+    st.header("📈 Temporal Dynamics of NO₂ Concentrations")
 
     cities = st.multiselect(
         "Select cities:",
@@ -47,24 +47,28 @@ with tab1:
         (df["year"].between(years[0], years[1]))
     ]
 
-  fig = px.line(
-    df_t,
-    x="month",
-    y="NO2",
-    color="City",
-    markers=True,
-    title="NO₂ Over Time (Selected Cities)",
-    hover_data={
-        "month": False,      # paslēpjam default
-        "month_name": True,  # rādam mēneša nosaukumu
-        "year": True,
-        "NO2": ":.1f"
-    }
-)
+    # Mēneša nosaukums hover datiem
+    df_t["month_name"] = df_t["month"].dt.strftime("%B %Y")
+    df_t["year"] = df_t["month"].dt.year
 
-# Izveidojam jaunu kolonnu ar mēneša nosaukumu
-df_t["month_name"] = df_t["month"].dt.strftime("%B %Y")
-df_t["year"] = df_t["month"].dt.year
+    fig = px.line(
+        df_t,
+        x="month",
+        y="NO2",
+        color="City",
+        markers=True,
+        title="NO₂ Over Time (Selected Cities)",
+        hover_data={
+            "month": False,
+            "month_name": True,
+            "year": True,
+            "NO2": ":.1f"
+        }
+    )
+
+    fig.update_layout(xaxis=dict(dtick="M12", tickformat="%Y"))
+
+    st.plotly_chart(fig, use_container_width=True)
 
 # ========================================================
 # TAB 2 — CITY MONTHLY LEVELS
