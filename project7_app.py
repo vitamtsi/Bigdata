@@ -4,7 +4,11 @@ import numpy as np
 import plotly.express as px
 import joblib
 
-st.set_page_config(page_title="NO₂concentrations across European capital cities", page_icon="🌍", layout="wide")
+st.set_page_config(
+    page_title="Spatio-temporal Analysis of Urban NO₂ in European Capitals (2018–2025)",
+    page_icon="🌍",
+    layout="wide"
+)
 
 # --------------------------------------------------------
 # LOAD DATA
@@ -14,161 +18,185 @@ def load_data():
     df = pd.read_csv("clean_no2_long.csv", parse_dates=["month"])
     df["year"] = df["month"].dt.year
     df["month_num"] = df["month"].dt.month
+    df["dayofyear"] = df["month"].dt.dayofyear
+    df["month_short"] = df["month"].dt.strftime("%b")
+    df["month_label"] = df["month"].dt.strftime("%b %Y")
     return df
 
 df = load_data()
 
-st.title("🌍 European NO₂ Dashboard (2018–2025)")
+# Optional: load model lazily only when Tab 5 is used
+@st.cache_resource
+def load_no2_model():
+    model = joblib.load("no2_rf_pipeline.pkl")
+    features = getattr(model, "feature_names_in_", None)
+    if features is None:
+        raise RuntimeError("Model has no feature_names_in_. Check Project 5 training.")
+    return model, list(features)
+
+
+st.title("🌍 Spatio-temporal Analysis of Urban NO₂ in European Capitals (2018–2025)")
 
 # ========================================================
 #  TABS
 # ========================================================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📈 NO₂ Over Time",
-    "🏙️ NO₂ Levels by City",
-    "📉 Correlation (Time vs NO₂)",
-    "🍁 Seasonal Variation",
-    "🤖 Machine Learning Prediction"
+    "📈 Temporal Dynamics",
+    "🏙️ City-level Monthly Profiles",
+    "📉 Temporal Correlation Structure",
+    "🍁 Seasonal Concentration Patterns",
+    "🔮 Predictive Forecasting"
 ])
 
 # ========================================================
-# TAB 1 — TIME SERIES
+# TAB 1 — NO₂ OVER TIME
 # ========================================================
 with tab1:
-    st.header("📈 Dynamics of NO₂concentrations across European capital cities")
+    st.header("📈 Temporal Dynamics of NO₂")
 
-    # Priority cities shown first
-    priority_cities = [
-        "EU27 (aggregate)",
+    # Default cities: Riga, Vilnius, Tallinn, EU27
+    default_cities = [
         "Riga (Latvia)",
-        "Bucharest (Romania)",
-        "Tallinn (Estonia)"
+        "Vilnius (Lithuania)",
+        "Tallinn (Estonia)",
+        "EU27 (aggregate)",
     ]
-
-    other_cities = sorted([c for c in df["City"].unique() if c not in priority_cities])
-    ordered_cities = priority_cities + other_cities
+    all_cities = sorted(df["City"].unique())
+    default_selection = [c for c in default_cities if c in all_cities]
 
     cities = st.multiselect(
-        "Select cities:",
-        ordered_cities,
-        default=priority_cities
+        "Select cities to display:",
+        all_cities,
+        default=default_selection
     )
 
-    years = st.slider("Select year range:", 2018, 2025, (2023, 2025))
+    min_year = int(df["year"].min())
+    max_year = int(df["year"].max())
+    # start from 2023 by default if available
+    default_start = 2023 if 2023 >= min_year else min_year
+
+    years = st.slider(
+        "Select year range:",
+        min_value=min_year,
+        max_value=max_year,
+        value=(default_start, max_year),
+    )
 
     df_t = df[
         (df["City"].isin(cities)) &
         (df["year"].between(years[0], years[1]))
     ].copy()
 
-    df_t["month_short"] = df_t["month"].dt.strftime("%b")
-    df_t["year"] = df_t["month"].dt.year
+    # Ensure EU27 is always in selection & red if present
+    color_map = {"EU27 (aggregate)": "red"}
+    # Other cities get default Plotly palette
 
-    # COLOR MAP — EU27 ALWAYS RED
-    base_colors = px.colors.qualitative.Set2
-    color_map = {city: base_colors[i % len(base_colors)] for i, city in enumerate(ordered_cities)}
-    color_map["EU27 (aggregate)"] = "red"
-
-    # --- BUILD INITIAL FIG ---
-    fig = px.line(
+    # Use custom_data for nice hover labels
+    df_t["year_int"] = df_t["year"]
+    fig1 = px.line(
         df_t,
         x="month",
         y="NO2",
         color="City",
         color_discrete_map=color_map,
         markers=True,
-        hover_data={
-            "City": True,
-            "NO2": True,
-            "month_short": True,
-            "year": True,
-            "month": False
-        },
-        title="NO₂ Over Time (Selected Cities)"
+        title="NO₂ Concentration Over Time"
     )
 
-    # --- SORT HOVER ORDER ---
-    # Sort traces at each x (month) by descending NO2 value
-    # EU27 gets absolute top priority
-    sorted_traces = sorted(
-        fig.data,
-        key=lambda t: (
-            0 if t.name == "EU27 (aggregate)" else 1,
-            -max(t.y)  # descending by NO2
+    fig1.update_traces(
+        customdata=np.stack(
+            [df_t["City"], df_t["NO2"], df_t["month_short"], df_t["year_int"]],
+            axis=-1
+        ),
+        hovertemplate=(
+            "City = %{customdata[0]}<br>"
+            "NO₂ = %{customdata[1]:.1f} µg/m³<br>"
+            "month = %{customdata[2]}<br>"
+            "year = %{customdata[3]}<extra></extra>"
         )
     )
-    fig.data = tuple(sorted_traces)
 
-    # AXIS FORMATTING
-    fig.update_xaxes(tickformat="%b\n%Y", showgrid=True)
-    fig.update_yaxes(showgrid=True)
-
-    fig.update_layout(
-        hovermode="x unified",
-        plot_bgcolor="white"
+    fig1.update_layout(
+        xaxis=dict(
+            dtick="M1",
+            tickformat="%b\n%Y",
+            showgrid=True
+        ),
+        yaxis=dict(showgrid=True)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig1, use_container_width=True)
+
 # ========================================================
-# TAB 2 — CITY MONTHLY LEVELS 
+# TAB 2 — CITY MONTHLY LEVELS
 # ========================================================
 with tab2:
-    st.header("🏙️ Monthly NO₂ Levels by European Capitals")
+    st.header("🏙️ City-level Monthly NO₂ Profiles")
 
-    # Month name list
+    # Month names for dropdown
     month_names = {
         1: "January", 2: "February", 3: "March", 4: "April",
         5: "May", 6: "June", 7: "July", 8: "August",
         9: "September", 10: "October", 11: "November", 12: "December"
     }
 
-    # Select year
-    selected_year = st.selectbox("Select Year:", sorted(df["year"].unique()), index=7)
+    selected_year = st.selectbox(
+        "Select Year:",
+        sorted(df["year"].unique()),
+        index=sorted(df["year"].unique()).index(2025)
+        if 2025 in df["year"].unique() else 0
+    )
 
-    # Select month by name
-    selected_month_name = st.selectbox(
+    # display month names but map to number
+    month_label = st.selectbox(
         "Select Month:",
         list(month_names.values()),
-        index=1  # February (just default)
+        index=8  # September by default (0-based index)
     )
+    # reverse map
+    inv_month = {v: k for k, v in month_names.items()}
+    selected_month = inv_month[month_label]
 
-    # Convert back to month number
-    selected_month = [num for num, name in month_names.items() if name == selected_month_name][0]
+    df_m = df[
+        (df["year"] == selected_year) &
+        (df["month_num"] == selected_month)
+    ].copy()
 
-    # Filter data
-    df_m = df[(df["year"] == selected_year) & (df["month_num"] == selected_month)].copy()
+    if df_m.empty:
+        st.warning("No data available for this year/month combination.")
+    else:
+        eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
 
-    # EU27 mean value
-    eu_value = df_m[df_m["City"] == "EU27 (aggregate)"]["NO2"].mean()
+        # classify relative to EU27 average
+        df_m["relative"] = df_m["NO2"].apply(
+            lambda x: "Above EU average" if x > eu_value
+            else ("At EU average" if np.isclose(x, eu_value, atol=1e-6)
+                  else "Below EU average")
+        )
 
-    # Sort cities by NO2 descending
-    df_m = df_m.sort_values("NO2", ascending=False)
+        # same colour logic as correlation-style (high = red, low = green)
+        color_map_rel = {
+            "Above EU average": "#d73027",   # red
+            "At EU average": "#fee08b",      # yellow
+            "Below EU average": "#1a9850"    # green
+        }
 
-    # Chart title month
-    month_title = selected_month_name + " " + str(selected_year)
+        # sort by NO2 descending (highest at top in bar chart)
+        df_m = df_m.sort_values("NO2", ascending=False)
 
-    # Plot
-    fig2 = px.bar(
-        df_m,
-        x="City",
-        y="NO2",
-        color="NO2",
-        color_continuous_scale="RdYlGn_r",  # same palette as correlation
-        title=f"NO₂ Levels by City — {month_title}"
-    )
+        month_name_long = f"{month_label} {selected_year}"
 
-    # EU average line
-    fig2.add_hline(
-        y=eu_value,
-        line_dash="dash",
-        line_color="black",
-        annotation_text="EU27 average",
-        annotation_position="top left"
-    )
+        fig2 = px.bar(
+            df_m,
+            x="City",
+            y="NO2",
+            color="relative",
+            color_discrete_map=color_map_rel,
+            title=f"NO₂ Levels by City — {month_name_long}",
+        )
 
-    fig2.update_layout(xaxis_tickangle=-60)
-
-    st.plotly_chart(fig2, use_container_width=True)
+        fig2.update_layout(xaxis_tickangle=-60)
+        st.plotly_chart(fig2, use_container_width=True)
 
 # ========================================================
 # TAB 3 — CORRELATION
@@ -192,23 +220,19 @@ with tab3:
         x="City",
         y="correlation",
         color="correlation",
-        # ŠEIT GALVENĀ IZMAIŅA:
-        color_continuous_scale="RdYlGn_r",
-        title="Correlation Between Time and NO₂ Concentration"
+        color_continuous_scale="RdYlGn_r",  # negative (improvement) → green, positive (worsening) → red
+        title="Pearson Correlation Between Time and NO₂ Concentration"
     )
 
     fig3.update_layout(xaxis_tickangle=-60)
     st.plotly_chart(fig3, use_container_width=True)
 
 # ========================================================
-
-# ========================================================
-# TAB 4 — SEASONAL VARIATION (with custom season colors)
+# TAB 4 — SEASONAL VARIATION
 # ========================================================
 with tab4:
-    st.header("🍁 Seasonal Variation of NO₂ Concentration")
+    st.header("🍁 Seasonal Patterns of NO₂ Concentration")
 
-    # Assign seasons manually
     def assign_season(m):
         if m in [12, 1, 2]:
             return "Winter"
@@ -219,9 +243,9 @@ with tab4:
         else:
             return "Autumn"
 
-    df["season"] = df["month_num"].apply(assign_season)
+    df_season = df.copy()
+    df_season["season"] = df_season["month_num"].apply(assign_season)
 
-    # Custom season colors
     season_colors = {
         "Winter": "purple",
         "Spring": "gold",
@@ -230,14 +254,26 @@ with tab4:
     }
 
     fig4 = px.box(
-        df,
+        df_season,
         x="season",
         y="NO2",
         color="season",
         color_discrete_map=season_colors,
         category_orders={"season": ["Winter", "Spring", "Summer", "Autumn"]},
-        hover_data={"City": True, "NO2": ":.2f", "season": True, "month_num": False},
-        title="Seasonal Variation of NO₂ Concentration in European Capitals"
+        title="Seasonal Distribution of NO₂ Concentrations in European Capitals"
+    )
+
+    # add city info to tooltip
+    fig4.update_traces(
+        customdata=np.stack(
+            [df_season["City"], df_season["season"], df_season["NO2"]],
+            axis=-1
+        ),
+        hovertemplate=(
+            "City = %{customdata[0]}<br>"
+            "Season = %{customdata[1]}<br>"
+            "NO₂ = %{customdata[2]:.1f} µg/m³<extra></extra>"
+        )
     )
 
     st.plotly_chart(fig4, use_container_width=True)
@@ -385,7 +421,3 @@ with tab5:
             f"- Min / Max forecast: "
             f"**{df_forecast['NO2_pred'].min():.1f} / {df_forecast['NO2_pred'].max():.1f} µg/m³**"
         )
-                          color_continuous_scale="RdYlGn_r",
-                          title="Prediction vs EU27 Long-Term Average")
-
-        st.plotly_chart(fig_pred, use_container_width=True)
