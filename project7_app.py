@@ -101,7 +101,7 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
 # ========================================================
-# TAB 2 — CITY MONTHLY LEVELS (same colormap as correlation)
+# TAB 2 — CITY MONTHLY LEVELS 
 # ========================================================
 with tab2:
     st.header("🏙️ Monthly NO₂ Levels by European Capitals")
@@ -162,7 +162,7 @@ with tab2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # ========================================================
-# TAB 3 — CORRELATION (AR APGRIEZTU KRĀSU SKALU)
+# TAB 3 — CORRELATION
 # ========================================================
 with tab3:
     st.header("📉 Correlation Between Time and NO₂ (2018–2025)")
@@ -192,3 +192,43 @@ with tab3:
     st.plotly_chart(fig3, use_container_width=True)
 
 # ========================================================
+
+# ========================================================
+# TAB 4 — SEASONAL VARIATION (with custom season colors)
+# ========================================================
+with tab4:
+    st.header("🍁 Seasonal Variation of NO₂ Concentration")
+
+    # Assign seasons manually
+    def assign_season(m):
+        if m in [12, 1, 2]:
+            return "Winter"
+        elif m in [3, 4, 5]:
+            return "Spring"
+        elif m in [6, 7, 8]:
+            return "Summer"
+        else:
+            return "Autumn"
+
+    df["season"] = df["month_num"].apply(assign_season)
+
+    # Custom season colors
+    season_colors = {
+        "Winter": "purple",
+        "Spring": "gold",
+        "Summer": "green",
+        "Autumn": "orange"
+    }
+
+    fig4 = px.box(
+        df,
+        x="season",
+        y="NO2",
+        color="season",
+        color_discrete_map=season_colors,
+        category_orders={"season": ["Winter", "Spring", "Summer", "Autumn"]},
+        hover_data={"City": True, "NO2": ":.2f", "season": True, "month_num": False},
+        title="Seasonal Variation of NO₂ Concentration in European Capitals"
+    )
+
+    st.plotly_chart(fig4, use_container_width=True)
