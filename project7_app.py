@@ -233,7 +233,7 @@ with tab4:
 with tab5:
     st.header("🔮 Forecasting Future NO₂ Concentrations")
 
-    st.write("This tab uses the trained Random Forest pipeline (Project 5) to forecast future monthly NO₂ values.")
+    st.write("This tab uses the trained Random Forest pipeline to forecast future monthly NO₂ values.")
 
     # Try loading the model
     try:
