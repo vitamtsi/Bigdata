@@ -232,10 +232,9 @@ with tab4:
 # ========================================================
 with tab5:
     st.header("🔮 Forecasting Future NO₂ Concentrations")
-
     st.write("This tab uses the trained Random Forest pipeline to forecast future monthly NO₂ values.")
 
-    # Try loading the model
+    # --- Load model ---
     try:
         model = joblib.load("no2_rf_pipeline.pkl")
         st.success("Model loaded successfully!")
@@ -243,78 +242,109 @@ with tab5:
         st.error(f"Model could not be loaded: {e}")
         st.stop()
 
-    # Load feature engineered dataset
+    # --- Load feature dataset ---
     try:
         df_feat = pd.read_csv("no2_with_features.csv", parse_dates=["month"])
-    except:
-        st.error("Could not load no2_with_features.csv — upload it to the Streamlit app folder.")
+    except Exception as e:
+        st.error(f"Could not load no2_with_features.csv — {e}")
         st.stop()
 
-    # UI
-    city = st.selectbox("Select a city for prediction:", sorted(df_feat["City"].unique()))
+    # --- Basic validation ---
+    if "City" not in df_feat.columns or "month" not in df_feat.columns or "NO2" not in df_feat.columns:
+        st.error("no2_with_features.csv is missing required columns (City, month, NO2).")
+        st.stop()
 
+    # --- UI ---
+    city = st.selectbox("Select a city for prediction:", sorted(df_feat["City"].dropna().unique()))
     horizon = st.slider("Forecast horizon (months):", 1, 12, 6)
 
     st.subheader(f"Forecasting next {horizon} months for **{city}**")
 
-    # Filter last known values
-    city_df = df_feat[df_feat["City"] == city].sort_values("month")
+    city_df = df_feat[df_feat["City"] == city].sort_values("month").copy()
+    if city_df.empty:
+        st.error("No data found for this city in no2_with_features.csv.")
+        st.stop()
 
     last_row = city_df.iloc[-1]
+
+    # --- Starting state from last observed row ---
+    current_year = int(last_row.get("year", last_row["month"].year))
+    current_month_num = int(last_row.get("month_num", last_row["month"].month))
+
+    last_NO2 = float(last_row["NO2"])
+    last_prev = float(last_row.get("NO2_prev_month", last_NO2))
+    last_roll3 = float(last_row.get("NO2_roll3", last_NO2))
+
+    # --- IMPORTANT: Use exact feature columns order expected by the model ---
+    if hasattr(model, "feature_names_in_"):
+        REQUIRED = list(model.feature_names_in_)
+    else:
+        # fallback if feature_names_in_ is not available
+        REQUIRED = ["City", "season", "year", "month_num", "dayofyear", "NO2_prev_month", "NO2_roll3"]
 
     preds = []
     future_months = []
 
-    current_year = last_row["year"]
-    current_month_num = last_row["month_num"]
-    last_NO2 = last_row["NO2"]
-    last_prev = last_row["NO2_prev_month"]
-    last_roll3 = last_row["NO2_roll3"]
-    last_dayofyear = last_row["dayofyear"]
+    def month_to_season(m: int) -> int:
+        # 1=winter, 2=spring, 3=summer, 4=autumn (same as Project 5)
+        return (m % 12) // 3 + 1
 
     for i in range(1, horizon + 1):
+        # compute future year + month
         future_month_num = ((current_month_num - 1 + i) % 12) + 1
         extra_years = (current_month_num - 1 + i) // 12
         future_year = current_year + extra_years
 
-        day_of_year = pd.Timestamp(future_year, future_month_num, 15).day_of_year
+        # dayofyear (use mid-month to be consistent)
+        day_of_year = int(pd.Timestamp(int(future_year), int(future_month_num), 15).day_of_year)
+        season_value = int(month_to_season(int(future_month_num)))
 
-        season_value = (
-            1 if future_month_num in [12, 1, 2] else
-            2 if future_month_num in [3, 4, 5] else
-            3 if future_month_num in [6, 7, 8] else
-            4
-        )
+        # build one-row input with correct types
+        row = {
+            "City": str(city),
+            "season": int(season_value),
+            "year": int(future_year),
+            "month_num": int(future_month_num),
+            "dayofyear": int(day_of_year),
+            "NO2_prev_month": float(last_NO2),
+            "NO2_roll3": float(last_roll3),
+        }
 
-        X = pd.DataFrame([{
-            "City": city,
-            "season": season_value,
-            "year": future_year,
-            "month_num": future_month_num,
-            "dayofyear": day_of_year,
-            "NO2_prev_month": last_NO2,
-            "NO2_roll3": last_roll3
-        }])
+        # ensure correct column order + only required columns
+        X = pd.DataFrame([[row.get(c, None) for c in REQUIRED]], columns=REQUIRED)
 
-        y_pred = model.predict(X)[0]
+        # force numeric types (critical for sklearn imputers/scalers)
+        for col in ["season", "year", "month_num", "dayofyear"]:
+            if col in X.columns:
+                X[col] = pd.to_numeric(X[col], errors="coerce").astype("Int64")
+        for col in ["NO2_prev_month", "NO2_roll3"]:
+            if col in X.columns:
+                X[col] = pd.to_numeric(X[col], errors="coerce").astype(float)
+        if "City" in X.columns:
+            X["City"] = X["City"].astype(str)
+
+        # predict
+        try:
+            y_pred = float(model.predict(X)[0])
+        except Exception as e:
+            st.error(f"Prediction failed: {e}")
+            st.write("Debug input row sent to model:")
+            st.dataframe(X)
+            st.stop()
 
         preds.append(y_pred)
-        future_months.append(f"{pd.Timestamp(future_year, future_month_num, 1).strftime('%b %Y')}")
+        future_months.append(pd.Timestamp(int(future_year), int(future_month_num), 1).strftime("%b %Y"))
 
-        last_roll3 = (last_roll3 * 3 - last_prev + y_pred) / 3
+        # update rolling state for next step
+        last_roll3 = (last_roll3 * 3 - last_prev + y_pred) / 3.0
         last_prev = last_NO2
         last_NO2 = y_pred
 
-    # Table
-    forecast_df = pd.DataFrame({
-        "Month": future_months,
-        "Predicted NO2": preds
-    })
+    forecast_df = pd.DataFrame({"Month": future_months, "Predicted NO2": preds})
 
     st.write("### 📅 Forecast Table")
-    st.dataframe(forecast_df)
+    st.dataframe(forecast_df, use_container_width=True)
 
-    # Chart
     fig5 = px.line(
         forecast_df,
         x="Month",
@@ -322,5 +352,4 @@ with tab5:
         markers=True,
         title=f"Forecasted NO₂ for {city}"
     )
-
     st.plotly_chart(fig5, use_container_width=True)
