@@ -342,7 +342,11 @@ with tab5:
 
     forecast_df = pd.DataFrame({"Month": future_months, "Predicted NO2": preds})
 
-       fig5 = px.line(
+
+    st.write("### 📅 Forecast Table")
+    st.dataframe(forecast_df, use_container_width=True)
+
+    fig5 = px.line(
         forecast_df,
         x="Month",
         y="Predicted NO2",
@@ -350,8 +354,3 @@ with tab5:
         title=f"Forecasted NO₂ for {city}"
     )
     st.plotly_chart(fig5, use_container_width=True)
-
-    st.write("### 📅 Forecast Table")
-    st.dataframe(forecast_df, use_container_width=True)
-
- 
